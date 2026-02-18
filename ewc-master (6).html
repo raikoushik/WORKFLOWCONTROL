@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow Controller</title>
+<style>
+/* ═══════════════════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════════════════ */
+*{margin:0;padding:0;box-sizing:border-box;}
+
+:root{
+  --p:#3b82f6; --pl:#60a5fa; --pd:#2563eb;
+  --sec:#8b5cf6; --success:#10b981; --warn:#f59e0b;
+  --danger:#ef4444; --info:#06b6d4;
+  --so:#3b82f6; --offer:#f59e0b;
+
+  --bg:#f8fafc; --card:#ffffff; --ter:#f1f5f9;
+  --txt:#1e293b; --muted:#64748b; --faint:#94a3b8;
+  --bdr:#e2e8f0;
+
+  --sh1:0 1px 3px rgba(0,0,0,.10);
+  --sh2:0 4px 6px rgba(0,0,0,.08);
+  --sh3:0 10px 24px rgba(0,0,0,.10);
+  --sh4:0 20px 40px rgba(0,0,0,.12);
+
+  --sidebar-w:268px;
+  --topbar-h:64px;
+}
+
+[data-theme="dark"]{
+  --bg:#0f172a; --card:#1e293b; --ter:#334155;
+  --txt:#f1f5f9; --muted:#cbd5e1; --faint:#94a3b8;
+  --bdr:#334155;
+}
+[data-theme="green"]{ --p:#10b981; --pl:#34d399; --pd:#059669; --sec:#14b8a6; }
+[data-theme="purple"]{ --p:#8b5cf6; --pl:#a78bfa; --pd:#7c3aed; --sec:#d946ef; }
+[data-theme="orange"]{ --p:#f59e0b; --pl:#fbbf24; --pd:#d97706; --sec:#fb923c; }
+
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg); color:var(--txt); line-height:1.6;
+  transition:background .3s,color .3s;
+}
+
+/* ═══════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════ */
+.sidebar{
+  position:fixed; left:0; top:0; height:100vh;
+  width:var(--sidebar-w);
+  background:var(--card); border-right:1px solid var(--bdr);
+  z-index:200; display:flex; flex-direction:column;
+  box-shadow:var(--sh2); transition:transform .3s;
+  overflow-y:auto;
+}
+.sidebar.collapsed{transform:translateX(-100%);}
+
+.sb-logo{
+  padding:20px 20px 18px;
+  border-bottom:1px solid var(--bdr);
+  display:flex; align-items:center; gap:12px;
+}
+.sb-logo-icon{
+  width:40px; height:40px; border-radius:12px;
+  background:linear-gradient(135deg,var(--p),var(--sec));
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:800; font-size:13px; flex-shrink:0;
+}
+.sb-logo-text{ font-size:15px; font-weight:700; color:var(--p); line-height:1.2;}
+.sb-logo-sub{ font-size:11px; color:var(--muted);}
+
+.sb-nav{ padding:12px 10px; flex:1;}
+.sb-item{
+  display:flex; align-items:center; gap:11px;
+  padding:11px 14px; border-radius:10px;
+  cursor:pointer; color:var(--muted); font-weight:500; font-size:14px;
+  margin-bottom:3px; transition:all .18s; user-select:none;
+}
+.sb-item svg{width:18px;height:18px;flex-shrink:0;}
+.sb-item:hover{background:var(--ter); color:var(--txt);}
+.sb-item.active{background:var(--p); color:#fff;}
+.sb-item .badge-count{
+  margin-left:auto; background:rgba(255,255,255,.3);
+  color:inherit; font-size:11px; font-weight:700;
+  padding:1px 7px; border-radius:99px; min-width:22px; text-align:center;
+}
+.sb-item.active .badge-count{background:rgba(255,255,255,.3);}
+.sb-item:not(.active) .badge-count{background:var(--p); color:#fff;}
+
+.sb-section-label{
+  font-size:10px; font-weight:700; color:var(--faint);
+  letter-spacing:.8px; text-transform:uppercase;
+  padding:12px 14px 6px;
+}
+
+/* ═══════════════════════════════════════════
+   TOP BAR
+═══════════════════════════════════════════ */
+.topbar{
+  position:fixed; left:var(--sidebar-w); right:0; top:0;
+  height:var(--topbar-h);
+  background:var(--card); border-bottom:1px solid var(--bdr);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 24px; z-index:100; box-shadow:var(--sh1);
+  transition:left .3s;
+}
+.topbar.full{left:0;}
+
+.topbar-left{display:flex; align-items:center; gap:14px;}
+.hamburger{
+  width:38px; height:38px; border:none; border-radius:9px;
+  background:var(--ter); cursor:pointer; display:flex;
+  align-items:center; justify-content:center; color:var(--txt);
+  font-size:18px; transition:all .2s;
+}
+.hamburger:hover{background:var(--p); color:#fff;}
+
+.page-title{font-size:20px; font-weight:700;}
+
+.topbar-right{display:flex; gap:10px; align-items:center;}
+
+/* ═══════════════════════════════════════════
+   MAIN AREA
+═══════════════════════════════════════════ */
+.main{
+  margin-left:var(--sidebar-w);
+  margin-top:var(--topbar-h);
+  padding:28px 28px 80px;
+  min-height:100vh;
+  transition:margin-left .3s;
+}
+.main.full{margin-left:0;}
+
+/* ═══════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════ */
+.btn{
+  padding:10px 20px; border-radius:10px; font-weight:600;
+  cursor:pointer; border:none; font-size:13px;
+  display:inline-flex; align-items:center; gap:7px;
+  transition:all .2s; white-space:nowrap; line-height:1;
+}
+.btn:hover{transform:translateY(-1px); box-shadow:var(--sh3);}
+.btn:active{transform:translateY(0);}
+.btn-p{background:var(--p); color:#fff;}
+.btn-p:hover{background:var(--pd);}
+.btn-sec{background:var(--ter); color:var(--txt); border:1.5px solid var(--bdr);}
+.btn-danger{background:var(--danger); color:#fff;}
+.btn-warn{background:var(--warn); color:#fff;}
+.btn-success{background:var(--success); color:#fff;}
+.btn-ai{background:linear-gradient(135deg,var(--p),var(--sec)); color:#fff;}
+.btn-sm{padding:7px 14px; font-size:12px;}
+.btn-xs{padding:5px 10px; font-size:11px;}
+
+/* ═══════════════════════════════════════════
+   STAT / KPI CARDS
+═══════════════════════════════════════════ */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:16px; margin-bottom:28px;
+}
+.kpi-card{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:16px; padding:22px 20px;
+  cursor:pointer; transition:all .25s; position:relative; overflow:hidden;
+}
+.kpi-card::after{
+  content:''; position:absolute; top:0; left:0;
+  width:100%; height:4px; background:var(--p);
+  transform:scaleX(0); transform-origin:left; transition:transform .3s;
+}
+.kpi-card:hover::after,.kpi-card.active::after{transform:scaleX(1);}
+.kpi-card:hover{transform:translateY(-4px); box-shadow:var(--sh3); border-color:var(--pl);}
+.kpi-card.active{border-color:var(--p); background:linear-gradient(135deg,rgba(59,130,246,.05),rgba(139,92,246,.05));}
+.kpi-val{font-size:34px; font-weight:800; color:var(--p); margin-bottom:6px; line-height:1;}
+.kpi-lbl{font-size:13px; color:var(--muted); font-weight:500;}
+.kpi-icon{position:absolute; top:18px; right:18px; font-size:24px; opacity:.15;}
+
+/* ═══════════════════════════════════════════
+   PROJECT CARDS (dashboard list)
+═══════════════════════════════════════════ */
+.proj-card{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:16px; padding:22px 24px;
+  margin-bottom:14px; cursor:pointer; transition:all .25s;
+  position:relative; overflow:hidden;
+}
+.proj-card::before{
+  content:''; position:absolute; left:0; top:0;
+  width:4px; height:100%; background:var(--p); transition:width .25s;
+}
+.proj-card:hover::before{width:7px;}
+.proj-card:hover{box-shadow:var(--sh3); border-color:var(--pl); transform:translateX(3px);}
+.proj-card.delayed{border-color:var(--danger);}
+.proj-card.delayed::before{background:var(--danger);}
+
+.proj-so{font-size:18px; font-weight:800; color:var(--p); margin-bottom:3px;}
+.proj-client{font-size:15px; font-weight:600; margin-bottom:2px;}
+.proj-equip{font-size:13px; color:var(--muted);}
+.proj-meta{display:flex; gap:14px; margin-top:10px; flex-wrap:wrap;}
+.proj-meta-item{font-size:12px; color:var(--muted);}
+
+/* ═══════════════════════════════════════════
+   BADGES
+═══════════════════════════════════════════ */
+.badge{
+  display:inline-flex; align-items:center;
+  padding:4px 12px; border-radius:7px;
+  font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.b-green{background:#dcfce7; color:#166534; border:1.5px solid #86efac;}
+.b-blue{background:#dbeafe; color:#1d4ed8; border:1.5px solid #93c5fd;}
+.b-yellow{background:#fef9c3; color:#854d0e; border:1.5px solid #fde047;}
+.b-red{background:#fee2e2; color:#991b1b; border:1.5px solid #fca5a5;}
+.b-purple{background:#ede9fe; color:#5b21b6; border:1.5px solid #c4b5fd;}
+.b-gray{background:#f1f5f9; color:#475569; border:1.5px solid #cbd5e1;}
+.b-orange{background:#fff7ed; color:#c2410c; border:1.5px solid #fdba74;}
+
+/* ═══════════════════════════════════════════
+   PROJECT DETAIL — HEADER
+═══════════════════════════════════════════ */
+.detail-header{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:16px; padding:24px 28px; margin-bottom:20px;
+}
+.detail-so{font-size:26px; font-weight:800; color:var(--p);}
+.detail-client{font-size:17px; font-weight:600; margin:3px 0;}
+.detail-equip{font-size:14px; color:var(--muted);}
+
+.info-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:13px; margin-bottom:22px;
+}
+.info-card{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:13px; padding:18px 16px;
+}
+.info-lbl{font-size:11px; color:var(--muted); font-weight:600; margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;}
+.info-val{font-size:18px; font-weight:700; color:var(--p);}
+
+/* ═══════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════ */
+.tabs{
+  display:flex; gap:4px; border-bottom:2px solid var(--bdr);
+  margin-bottom:24px;
+}
+.tab{
+  padding:11px 22px; cursor:pointer; color:var(--muted);
+  border-bottom:3px solid transparent; margin-bottom:-2px;
+  font-weight:500; font-size:14px; transition:all .18s;
+  border-radius:8px 8px 0 0;
+}
+.tab:hover{color:var(--txt); background:var(--ter);}
+.tab.active{color:var(--p); border-bottom-color:var(--p);}
+
+/* ═══════════════════════════════════════════
+   DOCUMENT CARDS
+═══════════════════════════════════════════ */
+.doc-card{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:16px; padding:22px 24px; margin-bottom:14px;
+  transition:all .2s; position:relative;
+}
+.doc-card:hover{box-shadow:var(--sh3); border-color:var(--pl);}
+.doc-card.needs-clar{
+  border-color:var(--warn);
+  background:linear-gradient(to right,#fffbeb,var(--card));
+}
+
+/* type ribbon */
+.type-ribbon{
+  position:absolute; top:0; right:18px;
+  padding:4px 13px; border-radius:0 0 9px 9px;
+  font-size:10px; font-weight:800; letter-spacing:.6px;
+}
+.r-so{background:var(--so); color:#fff;}
+.r-offer{background:var(--offer); color:#fff;}
+
+.doc-name{font-size:17px; font-weight:700; margin-bottom:6px; padding-right:65px;}
+.doc-meta{display:flex; flex-wrap:wrap; gap:16px; margin-bottom:13px;}
+.doc-meta-i{font-size:13px; color:var(--muted);}
+.dwg-no{font-family:'Courier New',monospace; font-weight:700; color:var(--p);}
+
+/* assignment strip */
+.assign-strip{
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:10px; padding:13px 16px; border-radius:10px;
+  background:var(--ter); border:1.5px solid var(--bdr);
+  margin:12px 0;
+}
+@media(max-width:600px){.assign-strip{grid-template-columns:1fr;}}
+.as-lbl{font-size:11px; color:var(--muted); font-weight:600; margin-bottom:3px;}
+.as-val{font-size:13px; font-weight:700; color:var(--txt);}
+.as-val.release{color:var(--so);}
+
+/* progress */
+.prog-bar{height:7px; background:var(--ter); border-radius:4px; overflow:hidden; margin:13px 0 5px;}
+.prog-fill{height:100%; background:linear-gradient(90deg,var(--p),var(--sec)); transition:width .5s;}
+
+/* clarification note */
+.clar-note{
+  background:#fffbeb; border:1.5px solid var(--warn);
+  border-radius:10px; padding:12px 14px; margin:12px 0;
+}
+.clar-note-lbl{font-size:11px; font-weight:800; color:var(--warn); margin-bottom:4px;}
+
+/* doc actions */
+.doc-actions{
+  display:flex; gap:8px; flex-wrap:wrap;
+  margin-top:14px; padding-top:14px; border-top:1.5px solid var(--bdr);
+}
+
+/* ═══════════════════════════════════════════
+   ACTIVITY LOG
+═══════════════════════════════════════════ */
+.act-item{
+  display:flex; gap:14px;
+  padding:14px 0; border-bottom:1px solid var(--bdr);
+}
+.act-item:last-child{border-bottom:none;}
+.act-dot{
+  width:10px; height:10px; border-radius:50%;
+  margin-top:5px; flex-shrink:0;
+}
+.d-add{background:var(--success);}
+.d-status{background:var(--so);}
+.d-release{background:var(--sec);}
+.d-delete{background:var(--danger);}
+.d-revision{background:var(--warn);}
+.d-clarify{background:#f59e0b;}
+.d-project{background:var(--p);}
+
+.act-badge{
+  font-size:10px; font-weight:700; padding:2px 8px;
+  border-radius:5px; display:inline-block; margin-bottom:4px;
+}
+.ab-add{background:#dcfce7; color:#166534;}
+.ab-status{background:#dbeafe; color:#1d4ed8;}
+.ab-release{background:#ede9fe; color:#5b21b6;}
+.ab-delete{background:#fee2e2; color:#991b1b;}
+.ab-revision{background:#fef9c3; color:#854d0e;}
+.ab-clarify{background:#fef3c7; color:#92400e;}
+.ab-project{background:#dbeafe; color:#1d4ed8;}
+
+.act-action{font-size:14px; font-weight:500; margin-bottom:2px;}
+.act-detail{font-size:12px; color:var(--muted); margin-bottom:2px;}
+.act-time{font-size:11px; color:var(--faint); font-family:monospace;}
+
+/* ═══════════════════════════════════════════
+   PURCHASE TRACKING TABLE
+═══════════════════════════════════════════ */
+.pur-card{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:14px; padding:18px 22px; margin-bottom:12px;
+}
+.pur-proj{font-size:13px; color:var(--muted); margin-bottom:6px;}
+.pur-name{font-size:15px; font-weight:700; margin-bottom:8px;}
+
+/* ═══════════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════════ */
+.settings-block{
+  background:var(--card); border:2px solid var(--bdr);
+  border-radius:16px; padding:24px; margin-bottom:20px;
+}
+.settings-title{font-size:17px; font-weight:700; margin-bottom:14px;}
+.theme-grid{display:flex; gap:12px; flex-wrap:wrap;}
+.theme-swatch{
+  width:64px; text-align:center; cursor:pointer;
+  padding:10px 8px; border-radius:12px;
+  border:2.5px solid var(--bdr); transition:all .2s;
+}
+.theme-swatch:hover,.theme-swatch.active{border-color:var(--p); transform:scale(1.07);}
+.swatch-circle{width:36px; height:36px; border-radius:50%; margin:0 auto 6px;}
+.swatch-lbl{font-size:11px; font-weight:600;}
+
+/* ═══════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════ */
+.modal{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.55); backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000; padding:20px;
+}
+.modal-box{
+  background:var(--card); border-radius:20px;
+  padding:28px 30px; width:100%; max-width:540px;
+  max-height:92vh; overflow-y:auto;
+  box-shadow:var(--sh4); animation:popIn .2s ease;
+}
+.modal-box.wide{max-width:760px;}
+@keyframes popIn{
+  from{transform:scale(.95) translateY(10px); opacity:0;}
+  to{transform:scale(1) translateY(0); opacity:1;}
+}
+.modal-head{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:22px;
+}
+.modal-title{font-size:20px; font-weight:700;}
+.x-btn{
+  width:30px; height:30px; background:var(--ter);
+  border:none; border-radius:8px; cursor:pointer; font-size:16px;
+  display:flex; align-items:center; justify-content:center; color:var(--txt);
+}
+.x-btn:hover{background:#fee2e2; color:var(--danger);}
+
+.fg{margin-bottom:17px;}
+.fl{display:block; font-size:13px; font-weight:600; color:var(--muted); margin-bottom:6px;}
+.fl span{color:var(--danger);}
+.fc{
+  width:100%; padding:11px 14px;
+  border:2px solid var(--bdr); border-radius:10px;
+  font-size:14px; color:var(--txt); background:var(--ter);
+  transition:border-color .2s;
+}
+.fc:focus{outline:none; border-color:var(--p); background:var(--card);}
+.frow{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+@media(max-width:520px){.frow{grid-template-columns:1fr;}}
+
+/* type toggle */
+.type-toggle{display:flex; gap:10px;}
+.type-btn{
+  flex:1; padding:12px; border:2px solid var(--bdr);
+  border-radius:10px; cursor:pointer; background:var(--ter);
+  text-align:center; font-weight:600; font-size:13px; transition:all .2s;
+}
+.type-btn.sel-so{border-color:var(--so); background:#eff6ff; color:var(--so);}
+.type-btn.sel-offer{border-color:var(--offer); background:#fffbeb; color:var(--offer);}
+
+/* clarification modal buttons */
+.clar-btns{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px;}
+@media(max-width:400px){.clar-btns{grid-template-columns:1fr;}}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+.toast{
+  position:fixed; top:18px; right:18px;
+  padding:13px 20px; border-radius:12px;
+  font-weight:600; font-size:14px; z-index:9999;
+  box-shadow:var(--sh3); animation:slideIn .3s ease;
+}
+.t-ok{background:var(--success); color:#fff;}
+.t-err{background:var(--danger); color:#fff;}
+@keyframes slideIn{from{transform:translateX(400px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* ═══════════════════════════════════════════
+   AI PANEL
+═══════════════════════════════════════════ */
+.ai-panel{
+  background:linear-gradient(135deg,var(--p),var(--sec));
+  border-radius:16px; padding:24px; color:#fff; margin-bottom:20px;
+  position:relative; overflow:hidden;
+}
+.ai-panel::before{
+  content:'✨'; position:absolute; right:20px; top:16px;
+  font-size:32px; opacity:.3;
+}
+.ai-result{
+  background:var(--card); border-radius:14px;
+  padding:22px; margin-top:16px; white-space:pre-wrap;
+  line-height:1.8; font-size:14px; color:var(--txt);
+}
+
+/* ═══════════════════════════════════════════
+   MISC
+═══════════════════════════════════════════ */
+.hidden{display:none !important;}
+.empty{text-align:center; padding:60px 20px; color:var(--muted);}
+.empty-ico{font-size:48px; margin-bottom:12px;}
+.section-head{
+  display:flex; justify-content:space-between;
+  align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;
+}
+.section-title{font-size:17px; font-weight:700;}
+.divider{height:1px; background:var(--bdr); margin:20px 0;}
+
+@media(max-width:768px){
+  :root{--sidebar-w:0px;}
+  .sidebar{transform:translateX(-268px); --sidebar-w:268px;}
+  .sidebar.open{transform:translateX(0);}
+  .topbar{left:0;}
+  .main{margin-left:0; padding:20px 16px 60px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">WC</div>
+    <div>
+      <div class="sb-logo-text">Workflow Controller</div>
+      <div class="sb-logo-sub">Designed &amp; Built by TULUVA</div>
+    </div>
+  </div>
+
+  <nav class="sb-nav">
+    <div class="sb-section-label">Overview</div>
+    <div class="sb-item active" data-view="dashboard" onclick="nav('dashboard',this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      Dashboard
+      <span class="badge-count" id="sb-active-count">0</span>
+    </div>
+    <div class="sb-item" data-view="projects" onclick="nav('projects',this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      All Projects
+    </div>
+
+    <div class="sb-section-label">Tracking</div>
+    <div class="sb-item" data-view="purchase" onclick="nav('purchase',this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Purchase Tracking
+      <span class="badge-count" id="sb-pur-count">0</span>
+    </div>
+    <div class="sb-item" data-view="activity-global" onclick="nav('activity-global',this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Activity Log
+    </div>
+
+    <div class="sb-section-label">Intelligence</div>
+    <div class="sb-item" data-view="ai" onclick="nav('ai',this)">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+      AI Insights
+    </div>
+
+    <div class="sb-section-label">System</div>
+    <div class="sb-item" data-view="settings" onclick="nav('settings',this)">
+
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Settings
+    </div>
+  </nav>
+
+  <!-- User Profile + Logout -->
+  <div style="margin-top:auto;border-top:1px solid var(--bdr);padding:14px 12px 18px;">
+    <div id="sb-user-card" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:var(--ter);cursor:pointer;transition:all .2s;" onclick="toggleUserMenu()">
+      <div id="sb-avatar" style="width:38px;height:38px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,var(--p),var(--sec));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;">T</div>
+      <div style="flex:1;min-width:0;">
+        <div id="sb-user-name" style="font-size:13px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">TULUVA</div>
+        <div id="sb-user-role" style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Workflow Controller</div>
+      </div>
+      <svg id="sb-chevron" style="width:16px;height:16px;color:var(--muted);flex-shrink:0;transition:transform .2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+      </svg>
+    </div>
+    <!-- Dropdown -->
+    <div id="sb-user-menu" style="display:none;margin-top:8px;background:var(--card);border:1.5px solid var(--bdr);border-radius:12px;overflow:hidden;box-shadow:var(--sh3);">
+      <div onclick="openEditUserModal()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:13px;font-weight:500;color:var(--txt);transition:background .15s;" onmouseover="this.style.background='var(--ter)'" onmouseout="this.style.background='transparent'">
+        <svg style="width:16px;height:16px;color:var(--muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Edit Profile
+      </div>
+      <div style="height:1px;background:var(--bdr);"></div>
+      <div onclick="confirmLogout()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--danger);transition:background .15s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
+        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        Log Out
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ═══════════════════════════════════
+     TOPBAR
+══════════════════════════════════════ -->
+<div class="topbar" id="topbar">
+  <div class="topbar-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="page-title" id="pageTitle">Dashboard</div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-p" onclick="openNewProjectModal()">+ New Project</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     MAIN VIEWS
+══════════════════════════════════════ -->
+<main class="main" id="main">
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard">
+    <div id="kpi-grid" class="kpi-grid"></div>
+    <div class="section-head">
+      <div class="section-title" id="proj-list-title">Active Projects</div>
+    </div>
+    <div id="proj-list"></div>
+  </div>
+
+  <!-- ALL PROJECTS -->
+  <div id="view-projects" class="hidden">
+    <div class="section-head">
+      <div class="section-title">All Projects</div>
+    </div>
+    <div id="all-proj-list"></div>
+  </div>
+
+  <!-- PURCHASE TRACKING -->
+  <div id="view-purchase" class="hidden">
+    <div class="section-head">
+      <div class="section-title">Documents in Purchase / SCM</div>
+    </div>
+    <div id="pur-list"></div>
+  </div>
+
+  <!-- GLOBAL ACTIVITY LOG -->
+  <div id="view-activity-global" class="hidden">
+    <div class="section-head">
+      <div class="section-title">Global Activity Log</div>
+    </div>
+    <div id="global-activity"></div>
+  </div>
+
+  <!-- AI INSIGHTS -->
+  <div id="view-ai" class="hidden">
+    <div class="ai-panel">
+      <div style="font-size:20px; font-weight:700; margin-bottom:8px;">AI Workflow Insights</div>
+      <div style="opacity:.9; font-size:14px; margin-bottom:16px;">Analyzes all projects, identifies bottlenecks and predicts issues based on historical data.</div>
+      <button class="btn" style="background:rgba(255,255,255,.2);color:#fff;" onclick="runAIInsights()">Generate Insights →</button>
+    </div>
+    <div id="ai-output"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="view-settings" class="hidden">
+    <div class="settings-block">
+      <div class="settings-title">Color Theme</div>
+      <div class="theme-grid">
+        <div class="theme-swatch active" onclick="setTheme('default',this)">
+          <div class="swatch-circle" style="background:linear-gradient(135deg,#3b82f6,#8b5cf6)"></div>
+          <div class="swatch-lbl">Blue</div>
+        </div>
+        <div class="theme-swatch" onclick="setTheme('green',this)">
+          <div class="swatch-circle" style="background:linear-gradient(135deg,#10b981,#14b8a6)"></div>
+          <div class="swatch-lbl">Green</div>
+        </div>
+        <div class="theme-swatch" onclick="setTheme('purple',this)">
+          <div class="swatch-circle" style="background:linear-gradient(135deg,#8b5cf6,#d946ef)"></div>
+          <div class="swatch-lbl">Purple</div>
+        </div>
+        <div class="theme-swatch" onclick="setTheme('orange',this)">
+          <div class="swatch-circle" style="background:linear-gradient(135deg,#f59e0b,#fb923c)"></div>
+          <div class="swatch-lbl">Orange</div>
+        </div>
+        <div class="theme-swatch" onclick="setTheme('dark',this)">
+          <div class="swatch-circle" style="background:linear-gradient(135deg,#1e293b,#334155)"></div>
+          <div class="swatch-lbl">Dark</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-block">
+      <div class="settings-title">Data Management</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <button class="btn btn-sec" onclick="exportData()">↓ Export JSON</button>
+        <button class="btn btn-sec" onclick="document.getElementById('importFile').click()">↑ Import JSON</button>
+        <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+        <button class="btn btn-sec" onclick="if(confirm('Reset to demo data?')){resetDemo();}">↺ Reset Demo</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PROJECT DETAIL -->
+  <div id="view-detail" class="hidden">
+    <button class="btn btn-sec btn-sm" onclick="backToDash()" style="margin-bottom:18px;">← Back</button>
+
+    <div class="detail-header">
+      <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+            <div class="detail-so" id="d-so"></div>
+            <span id="d-proj-status-badge" class="badge b-green">RECEIVED</span>
+          </div>
+          <div class="detail-client" id="d-client"></div>
+          <div class="detail-equip" id="d-equip"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:start;">
+          <button class="btn btn-sec btn-sm" onclick="openEditProjectModal()">✏️ Edit Project</button>
+          <button class="btn btn-ai btn-sm" onclick="runProjectAI()">✨ AI Report</button>
+          <button class="btn btn-sec btn-sm" onclick="genCommReport()">📋 Comm. Report</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="d-info-grid" class="info-grid"></div>
+
+    <div class="tabs" id="detail-tabs">
+      <div class="tab active" onclick="detailTab('overview',this)">Overview</div>
+      <div class="tab" onclick="detailTab('documents',this)">Documents</div>
+      <div class="tab" onclick="detailTab('activity',this)">Activity</div>
+      <div class="tab" onclick="detailTab('reports',this)">Reports</div>
+    </div>
+
+    <div id="dt-overview"></div>
+    <div id="dt-documents" class="hidden"></div>
+    <div id="dt-activity" class="hidden"></div>
+    <div id="dt-reports" class="hidden"></div>
+  </div>
+
+</main>
+
+<!-- ══════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════ -->
+
+<!-- NEW PROJECT -->
+<div id="m-newproject" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">New Project</div>
+      <button class="x-btn" onclick="closeModal('m-newproject')">✕</button>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">SO Number <span>*</span></label><input class="fc" id="np-so"></div>
+      <div class="fg"><label class="fl">Client Name <span>*</span></label><input class="fc" id="np-client"></div>
+    </div>
+    <div class="fg"><label class="fl">Equipment / Description <span>*</span></label><input class="fc" id="np-equip"></div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Capacity</label><input class="fc" id="np-cap" placeholder="e.g. 150 TPH"></div>
+      <div class="fg"><label class="fl">Priority</label>
+        <select class="fc" id="np-pri"><option>LOW</option><option selected>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-p" onclick="createProject()" style="flex:1;">Create Project</button>
+      <button class="btn btn-sec" onclick="closeModal('m-newproject')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DOCUMENT -->
+<div id="m-adddoc" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Add Document</div>
+      <button class="x-btn" onclick="closeModal('m-adddoc')">✕</button>
+    </div>
+    <!-- SO / OFFER toggle -->
+    <div class="fg">
+      <label class="fl">Document Type <span>*</span></label>
+      <div class="type-toggle">
+        <div class="type-btn sel-so" id="tb-so" onclick="selType('SO')">📋 SO (Sales Order)</div>
+        <div class="type-btn" id="tb-offer" onclick="selType('OFFER')">📄 OFFER (Pre-Order)</div>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Document Name <span>*</span></label><input class="fc" id="ad-name"></div>
+      <div class="fg"><label class="fl">Drawing Number <span>*</span></label><input class="fc" id="ad-dwg" placeholder="DWG-001-2024"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Assigned By</label><input class="fc" id="ad-by" placeholder="Who assigned this"></div>
+      <div class="fg"><label class="fl">Assigned To</label><input class="fc" id="ad-to" placeholder="Who will work on it"></div>
+    </div>
+    <div class="fg"><label class="fl">Releasing To (Next)</label><input class="fc" id="ad-rel" placeholder="Next dept / person"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-p" onclick="addDocument()" style="flex:1;">Add Document</button>
+      <button class="btn btn-sec" onclick="closeModal('m-adddoc')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE STATUS -->
+<div id="m-status" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Change Document Status</div>
+      <button class="x-btn" onclick="closeModal('m-status')">✕</button>
+    </div>
+    <div class="fg"><label class="fl">Current Stage</label><input class="fc" id="cs-current" disabled style="opacity:.6;"></div>
+    <div class="fg">
+      <label class="fl">New Stage <span>*</span></label>
+      <select class="fc" id="cs-new">
+        <optgroup label="── PRE-ORDER (OFFER) ──">
+          <option value="OFFER_STAGE">Offer Stage</option>
+          <option value="OFFER_CLARIFICATION">Offer Clarification</option>
+          <option value="CLIENT_COMMENT">Client Comment</option>
+          <option value="RESUBMISSION">Resubmission to Client</option>
+        </optgroup>
+        <optgroup label="── POST ORDER (SO) ──">
+          <option value="SO_CONFIRMED">SO Confirmed</option>
+          <option value="SO_MEETING">SO Meeting / TSS Clarification</option>
+          <option value="DESIGN">Design / Engineering</option>
+        </optgroup>
+        <optgroup label="── CLIENT REVIEW ──">
+          <option value="CLIENT_SUBMISSION">Submit to Client</option>
+          <option value="CLIENT_APPROVAL">Client Approval Pending</option>
+          <option value="CLIENT_COMMENTED">Client Commented</option>
+          <option value="REVISION">Revision In Progress</option>
+          <option value="APPROVED">Client Approved</option>
+        </optgroup>
+        <optgroup label="── PURCHASE / VENDOR ──">
+          <option value="PURCHASE_REVIEW">Purchase / SCM Review</option>
+          <option value="VENDOR_DISCUSSION">Vendor Discussion</option>
+          <option value="PURCHASE_APPROVED">Purchase Approved</option>
+        </optgroup>
+        <optgroup label="── RELEASE ──">
+          <option value="INTERNAL_RELEASE">Internal Release (PPC / Execution)</option>
+          <option value="RELEASED_TO_PURCHASE">Released to Purchase</option>
+        </optgroup>
+        <optgroup label="── FINAL ──">
+          <option value="COMMISSIONING">Commissioning</option>
+          <option value="CLOSED">Closed</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Update Releasing To</label><input class="fc" id="cs-rel" placeholder="Next dept / person"></div>
+      <div class="fg"><label class="fl">Update Assigned To</label><input class="fc" id="cs-ato" placeholder="Leave blank = keep"></div>
+    </div>
+    <div class="fg"><label class="fl">Remarks</label><textarea class="fc" id="cs-rem" rows="3"></textarea></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-p" onclick="applyStatus()" style="flex:1;">Update Status</button>
+      <button class="btn btn-sec" onclick="closeModal('m-status')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLARIFICATION -->
+<div id="m-clar" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">📝 Clarification</div>
+      <button class="x-btn" onclick="closeModal('m-clar')">✕</button>
+    </div>
+    <div style="background:#fef9c3;border:2px solid var(--warn);border-radius:12px;padding:14px;margin-bottom:18px;">
+      <div style="font-weight:700;color:#92400e;margin-bottom:5px;">How this works</div>
+      <div style="font-size:13px;color:#78350f;line-height:1.7;">
+        • Write your notes / remarks about the clarification<br>
+        • <strong>Clarified → Proceed</strong>: marks resolved, unlocks stage change<br>
+        • <strong>Send Back</strong>: returns document to the person who assigned you
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Notes / Remarks <span>*</span></label><textarea class="fc" id="cl-notes" rows="4" placeholder="Describe the clarification needed..."></textarea></div>
+    
+    <div class="clar-btns">
+      <button class="btn btn-p" onclick="markClarified()">✓ Clarified — Proceed</button>
+      <button class="btn btn-warn" onclick="sendBack()">← Send Back to Assignor</button>
+    </div>
+
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--bdr);">
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px;">📤 Share Update:</div>
+      
+      <!-- Clarified Message -->
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">✅ "Clarification Resolved" message:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sec btn-sm" onclick="shareViaMail('clarified')" title="Share via Email" style="font-size:11px;padding:6px 12px;">
+            📧 Email
+          </button>
+          <button class="btn btn-sec btn-sm" onclick="shareViaTeams('clarified')" title="Share via Teams" style="font-size:11px;padding:6px 12px;">
+            💬 Teams
+          </button>
+          <button class="btn btn-sec btn-sm" onclick="copyShareMessage('clarified')" title="Copy to clipboard" style="font-size:11px;padding:6px 12px;">
+            📋 Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Send Back Message -->
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">⚠️ "Needs Clarification" message:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sec btn-sm" onclick="shareViaMail('sendback')" title="Share via Email" style="font-size:11px;padding:6px 12px;">
+            📧 Email
+          </button>
+          <button class="btn btn-sec btn-sm" onclick="shareViaTeams('sendback')" title="Share via Teams" style="font-size:11px;padding:6px 12px;">
+            💬 Teams
+          </button>
+          <button class="btn btn-sec btn-sm" onclick="copyShareMessage('sendback')" title="Copy to clipboard" style="font-size:11px;padding:6px 12px;">
+            📋 Copy
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div id="m-delete" class="modal hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:42px;margin-bottom:10px;">⚠️</div>
+      <div class="modal-title" style="margin-bottom:10px;">Delete Document?</div>
+      <div id="del-name" style="background:#fef2f2;border:2px solid #fca5a5;border-radius:10px;padding:12px;margin:14px 0;font-weight:600;color:var(--danger);"></div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:22px;">Document will be permanently removed.<br>The deletion will be recorded in the Activity Log.</div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn btn-danger" onclick="confirmDelete()">Yes, Delete</button>
+        <button class="btn btn-sec" onclick="closeModal('m-delete')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PROJECT -->
+<div id="m-editproject" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">✏️ Edit Project Details</div>
+      <button class="x-btn" onclick="closeModal('m-editproject')">✕</button>
+    </div>
+    <div class="frow">
+      <div class="fg"><label class="fl">SO Number <span>*</span></label><input class="fc" id="ep-so"></div>
+      <div class="fg"><label class="fl">Client Name <span>*</span></label><input class="fc" id="ep-client"></div>
+    </div>
+    <div class="fg"><label class="fl">Equipment / Description <span>*</span></label><input class="fc" id="ep-equip"></div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Capacity</label><input class="fc" id="ep-cap"></div>
+      <div class="fg"><label class="fl">Priority</label>
+        <select class="fc" id="ep-pri">
+          <option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Project Status -->
+    <div class="fg">
+      <label class="fl">Project Status</label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;">
+        <div class="proj-status-btn" id="psb-RECEIVED" onclick="selectProjStatus('RECEIVED')"
+          style="padding:14px 10px;border:2px solid var(--bdr);border-radius:10px;cursor:pointer;text-align:center;transition:all .2s;">
+          <div style="font-size:20px;margin-bottom:4px;">📬</div>
+          <div style="font-size:12px;font-weight:700;">RECEIVED</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Active project</div>
+        </div>
+        <div class="proj-status-btn" id="psb-HOLD" onclick="selectProjStatus('HOLD')"
+          style="padding:14px 10px;border:2px solid var(--bdr);border-radius:10px;cursor:pointer;text-align:center;transition:all .2s;">
+          <div style="font-size:20px;margin-bottom:4px;">⏸️</div>
+          <div style="font-size:12px;font-weight:700;">ON HOLD</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Paused</div>
+        </div>
+        <div class="proj-status-btn" id="psb-CANCELLED" onclick="selectProjStatus('CANCELLED')"
+          style="padding:14px 10px;border:2px solid var(--bdr);border-radius:10px;cursor:pointer;text-align:center;transition:all .2s;">
+          <div style="font-size:20px;margin-bottom:4px;">❌</div>
+          <div style="font-size:12px;font-weight:700;">CANCELLED</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">Closed out</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fg" id="ep-reason-wrap" style="display:none;">
+      <label class="fl">Reason for Status Change</label>
+      <textarea class="fc" id="ep-reason" rows="3" placeholder="Why is the project on hold or cancelled?"></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn btn-p" onclick="saveProjectEdits()" style="flex:1;">Save Changes</button>
+      <button class="btn btn-sec" onclick="closeModal('m-editproject')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI MODAL -->
+<div id="m-ai" class="modal hidden">
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <div class="modal-title">✨ AI Project Report</div>
+      <button class="x-btn" onclick="closeModal('m-ai')">✕</button>
+    </div>
+    <div id="ai-modal-content"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════ -->
+<script>
+// ═══════════════════════════════════════
+//  CONSTANTS & STATE
+// ═══════════════════════════════════════
+const SK = 'ewc_projects_v5';
+const LK = 'ewc_log_v5';
+
+let projects = [];
+let globalLog = [];
+let curProjId = null;
+let curDocId  = null;
+let delDocId  = null;
+let curFilter = 'all';
+let docType   = 'SO';
+
+const STAGES = [
+  'OFFER_STAGE','OFFER_CLARIFICATION','CLIENT_COMMENT','RESUBMISSION',
+  'SO_CONFIRMED','SO_MEETING','DESIGN',
+  'CLIENT_SUBMISSION','CLIENT_APPROVAL','CLIENT_COMMENTED','REVISION','APPROVED',
+  'PURCHASE_REVIEW','VENDOR_DISCUSSION','PURCHASE_APPROVED',
+  'INTERNAL_RELEASE','RELEASED_TO_PURCHASE','COMMISSIONING','CLOSED'
+];
+
+const SL = {
+  OFFER_STAGE:'Offer Stage', OFFER_CLARIFICATION:'Offer Clarification',
+  CLIENT_COMMENT:'Client Comment', RESUBMISSION:'Resubmission',
+  SO_CONFIRMED:'SO Confirmed', SO_MEETING:'SO Meeting',
+  DESIGN:'Design', CLIENT_SUBMISSION:'Client Submission',
+  CLIENT_APPROVAL:'Client Approval', CLIENT_COMMENTED:'Client Commented',
+  REVISION:'Revision', APPROVED:'Approved',
+  PURCHASE_REVIEW:'Purchase Review', VENDOR_DISCUSSION:'Vendor Discussion',
+  PURCHASE_APPROVED:'Purchase Approved', INTERNAL_RELEASE:'Internal Release',
+  RELEASED_TO_PURCHASE:'Released to Purchase',
+  COMMISSIONING:'Commissioning', CLOSED:'Closed'
+};
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+function init(){
+  const sp = localStorage.getItem(SK);
+  const sl = localStorage.getItem(LK);
+  projects  = sp ? JSON.parse(sp) : [];
+  globalLog = sl ? JSON.parse(sl) : [];
+  if(!projects.length) loadDemo();
+  const t = localStorage.getItem('ewc_theme')||'default';
+  applyTheme(t);
+  loadUserProfile();
+  nav('dashboard');
+}
+
+function save(){
+  localStorage.setItem(SK, JSON.stringify(projects));
+  localStorage.setItem(LK, JSON.stringify(globalLog));
+
+  fetch("https://script.google.com/macros/s/AKfycbw4sGncxABSoXafW0fLxAzQFaU9tOu1lMH34btlhyBQDwQ3E9rfvGVETjy_8KuxiY6fsQ/exec", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "save",
+      projects: projects,
+      globalLog: globalLog
+    })
+  });
+}
+
+// ═══════════════════════════════════════
+//  DEMO DATA
+// ═══════════════════════════════════════
+function loadDemo(){
+  const n = Date.now();
+  projects = [{
+    id:uid(), soNo:'SO-2024-001', client:'Tata Steel Ltd',
+    equipment:'Electric Arc Furnace Control Panel', capacity:'150 TPH',
+    priority:'HIGH', createdAt:n-15*864e5,
+    documents:[
+      { id:uid(), name:'Control Panel GA Drawing', drawingNumber:'DWG-CP-001-2024',
+        type:'SO', revision:'R2', stage:'CLIENT_APPROVAL',
+        stageEnteredAt:n-3*864e5, createdAt:n-12*864e5,
+        assignedBy:'Koushik Rai', assignedTo:'Rajesh Kumar', releasingTo:'Client',
+        needsClarification:false, clarifications:[], actLog:[] },
+      { id:uid(), name:'Power Schematic', drawingNumber:'DWG-PS-002-2024',
+        type:'SO', revision:'R1', stage:'INTERNAL_RELEASE',
+        stageEnteredAt:n-1*864e5, createdAt:n-10*864e5,
+        assignedBy:'Koushik Rai', assignedTo:'Suresh M', releasingTo:'PPC Team',
+        needsClarification:false, clarifications:[], actLog:[] }
+    ],
+    commReports:[]
+  },{
+    id:uid(), soNo:'SO-2024-002', client:'JSW Steel',
+    equipment:'Blast Furnace PLC System', capacity:'200 TPH',
+    priority:'CRITICAL', createdAt:n-20*864e5,
+    documents:[
+      { id:uid(), name:'Control Logic Design', drawingNumber:'DWG-CLD-003-2024',
+        type:'SO', revision:'R0', stage:'DESIGN',
+        stageEnteredAt:n-8*864e5, createdAt:n-8*864e5,
+        assignedBy:'PMG Team', assignedTo:'Koushik Rai', releasingTo:'Client',
+        needsClarification:false, clarifications:[], actLog:[] },
+      { id:uid(), name:'Tender GA Drawing', drawingNumber:'DWG-TGA-004-2024',
+        type:'OFFER', revision:'R0', stage:'OFFER_STAGE',
+        stageEnteredAt:n-2*864e5, createdAt:n-2*864e5,
+        assignedBy:'TSS Dept', assignedTo:'Koushik Rai', releasingTo:'TSS',
+        needsClarification:false, clarifications:[], actLog:[] }
+    ],
+    commReports:[]
+  }];
+  gLog('project','Demo data loaded — 2 sample projects',{});
+  save();
+}
+
+// ═══════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════
+const VIEWS = ['dashboard','projects','purchase','activity-global','ai','settings','detail'];
+
+function nav(view, el){
+  VIEWS.forEach(v => document.getElementById('view-'+v)?.classList.add('hidden'));
+  document.getElementById('view-'+view)?.classList.remove('hidden');
+
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  if(el) el.classList.add('active');
+  else {
+    const match = document.querySelector(`.sb-item[data-view="${view}"]`);
+    if(match) match.classList.add('active');
+  }
+
+  const titles={dashboard:'Dashboard',projects:'All Projects',purchase:'Purchase Tracking',
+    'activity-global':'Activity Log',ai:'AI Insights',settings:'Settings',detail:'Project Detail'};
+  document.getElementById('pageTitle').textContent = titles[view]||view;
+
+  if(view==='dashboard')       renderDashboard();
+  if(view==='projects')        renderAllProjects();
+  if(view==='purchase')        renderPurchase();
+  if(view==='activity-global') renderGlobalActivity();
+  if(view==='ai')              renderAIView();
+}
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const mn = document.getElementById('main');
+  const tb = document.getElementById('topbar');
+  sb.classList.toggle('collapsed');
+  sb.classList.toggle('open');
+  mn.classList.toggle('full');
+  tb.classList.toggle('full');
+}
+
+function backToDash(){ nav('dashboard'); }
+
+// ═══════════════════════════════════════
+//  KPI HELPERS
+// ═══════════════════════════════════════
+function allDocs(){ return projects.flatMap(p=>p.documents); }
+
+function kpis(){
+  const d = allDocs();
+  return {
+    active:   projects.filter(p=>!p.documents.every(x=>x.stage==='CLOSED')).length,
+    design:   d.filter(x=>x.stage==='DESIGN'||x.stage==='SO_MEETING').length,
+    client:   d.filter(x=>['CLIENT_APPROVAL','CLIENT_SUBMISSION','CLIENT_COMMENTED'].includes(x.stage)).length,
+    purchase: d.filter(x=>['PURCHASE_REVIEW','VENDOR_DISCUSSION'].includes(x.stage)).length,
+    released: d.filter(x=>['INTERNAL_RELEASE','RELEASED_TO_PURCHASE'].includes(x.stage)).length,
+    closed:   projects.filter(p=>p.documents.length && p.documents.every(x=>x.stage==='CLOSED')).length
+  };
+}
+
+function stageProgress(s){
+  const i = STAGES.indexOf(s);
+  return i<0?0:Math.round((i+1)/STAGES.length*100);
+}
+
+function isDelayed(doc){
+  return Math.floor((Date.now()-doc.stageEnteredAt)/864e5)>7 && doc.stage!=='CLOSED';
+}
+
+// ═══════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════
+function renderDashboard(){
+  const k = kpis();
+  document.getElementById('sb-active-count').textContent = k.active;
+  document.getElementById('sb-pur-count').textContent    = k.purchase;
+
+  const defs = [
+    {key:'all',   val:k.active,   lbl:'Active Projects', ico:'📊'},
+    {key:'design',val:k.design,   lbl:'In Design',       ico:'✏️'},
+    {key:'client',val:k.client,   lbl:'With Client',     ico:'👤'},
+    {key:'purchase',val:k.purchase,lbl:'In Purchase',    ico:'🛒'},
+    {key:'released',val:k.released,lbl:'Released',       ico:'📤'},
+    {key:'closed',val:k.closed,   lbl:'Completed',       ico:'🎉'},
+  ];
+
+  document.getElementById('kpi-grid').innerHTML = defs.map(d=>`
+    <div class="kpi-card${curFilter===d.key?' active':''}" onclick="setFilter('${d.key}')">
+      <div class="kpi-val">${d.val}</div>
+      <div class="kpi-lbl">${d.lbl}</div>
+      <div class="kpi-icon">${d.ico}</div>
+    </div>`).join('');
+
+  renderProjList();
+}
+
+function setFilter(f){
+  curFilter=f;
+  renderDashboard();
+}
+
+function filterProjects(){
+  const d = allDocs();
+  switch(curFilter){
+    case 'design':   return projects.filter(p=>p.documents.some(x=>x.stage==='DESIGN'||x.stage==='SO_MEETING'));
+    case 'client':   return projects.filter(p=>p.documents.some(x=>['CLIENT_APPROVAL','CLIENT_SUBMISSION','CLIENT_COMMENTED'].includes(x.stage)));
+    case 'purchase': return projects.filter(p=>p.documents.some(x=>['PURCHASE_REVIEW','VENDOR_DISCUSSION'].includes(x.stage)));
+    case 'released': return projects.filter(p=>p.documents.some(x=>['INTERNAL_RELEASE','RELEASED_TO_PURCHASE'].includes(x.stage)));
+    case 'closed':   return projects.filter(p=>p.documents.length && p.documents.every(x=>x.stage==='CLOSED'));
+    default:         return projects.filter(p=>!p.documents.every(x=>x.stage==='CLOSED'));
+  }
+}
+
+function renderProjList(){
+  const list = filterProjects();
+  const el = document.getElementById('proj-list');
+  const titles={all:'Active Projects',design:'Design Team',client:'With Client',
+    purchase:'In Purchase',released:'Released',closed:'Completed'};
+  document.getElementById('proj-list-title').textContent = titles[curFilter]||'Projects';
+  el.innerHTML = list.length ? list.map(projCard).join('') :
+    `<div class="empty"><div class="empty-ico">🔍</div>No projects in this filter</div>`;
+}
+
+function renderAllProjects(){
+  document.getElementById('all-proj-list').innerHTML =
+    projects.length ? projects.map(projCard).join('') :
+    `<div class="empty"><div class="empty-ico">📁</div>No projects yet</div>`;
+}
+
+function projCard(p){
+  if(!p.projStatus) p.projStatus='RECEIVED';
+  const docs = p.documents;
+  const closed = docs.filter(d=>d.stage==='CLOSED').length;
+  const delayed = docs.some(isDelayed);
+  const pb = priorityBadge(p.priority);
+  const statusMap = {RECEIVED:{cls:'b-green',lbl:'📬 Received'},HOLD:{cls:'b-yellow',lbl:'⏸ On Hold'},CANCELLED:{cls:'b-red',lbl:'❌ Cancelled'}};
+  const ps = statusMap[p.projStatus]||statusMap.RECEIVED;
+  const cardBorder = p.projStatus==='HOLD'?'border-color:var(--warn);'
+                   : p.projStatus==='CANCELLED'?'border-color:var(--danger);opacity:.75;':'';
+  return `<div class="proj-card${delayed?' delayed':''}" style="${cardBorder}" onclick="openProject('${p.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:12px;">
+      <div>
+        <div class="proj-so">${p.soNo}</div>
+        <div class="proj-client">${p.client}</div>
+        <div class="proj-equip">${p.equipment}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        <span class="badge ${pb}">${p.priority}</span>
+        <span class="badge ${ps.cls}">${ps.lbl}</span>
+      </div>
+    </div>
+    <div class="proj-meta">
+      <div class="proj-meta-item">📄 ${closed}/${docs.length} docs closed</div>
+      <div class="proj-meta-item" style="color:${delayed?'var(--danger)':'var(--success)'};">
+        ${delayed?'⚠️ Delayed':'✓ On Track'}</div>
+      ${p.capacity?`<div class="proj-meta-item">⚡ ${p.capacity}</div>`:''}
+    </div>
+    ${p.projStatus!=='RECEIVED'&&p.statusReason?`<div style="font-size:12px;color:var(--muted);margin-top:8px;font-style:italic;">Reason: ${p.statusReason}</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════
+//  PROJECT DETAIL
+// ═══════════════════════════════════════
+function openProject(pid){
+  curProjId = pid;
+  const p = projects.find(x=>x.id===pid);
+  if(!p) return;
+  if(!p.projStatus) p.projStatus = 'RECEIVED'; // default for old records
+  nav('detail');
+
+  document.getElementById('d-so').textContent     = p.soNo;
+  document.getElementById('d-client').textContent = p.client;
+  document.getElementById('d-equip').textContent  = p.equipment+(p.capacity?' | '+p.capacity:'');
+
+  // Project status badge
+  const badge = document.getElementById('d-proj-status-badge');
+  const badgeMap = {RECEIVED:'b-green',HOLD:'b-yellow',CANCELLED:'b-red'};
+  const labelMap = {RECEIVED:'📬 RECEIVED',HOLD:'⏸ ON HOLD',CANCELLED:'❌ CANCELLED'};
+  badge.className = 'badge '+(badgeMap[p.projStatus]||'b-green');
+  badge.textContent = labelMap[p.projStatus]||p.projStatus;
+
+  const docs=p.documents, closed=docs.filter(d=>d.stage==='CLOSED').length;
+  const age = Math.floor((Date.now()-p.createdAt)/864e5);
+  document.getElementById('d-info-grid').innerHTML = `
+    <div class="info-card"><div class="info-lbl">Priority</div><div class="info-val">${p.priority}</div></div>
+    <div class="info-card"><div class="info-lbl">Documents</div><div class="info-val">${closed}/${docs.length}</div></div>
+    <div class="info-card"><div class="info-lbl">Days Active</div><div class="info-val">${age}</div></div>
+    <div class="info-card"><div class="info-lbl">Project Status</div><div class="info-val" style="font-size:14px;">${labelMap[p.projStatus]||p.projStatus}</div></div>`;
+
+  detailTab('overview', document.querySelector('#detail-tabs .tab'));
+}
+
+function detailTab(tab, el){
+  document.querySelectorAll('#detail-tabs .tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  ['overview','documents','activity','reports'].forEach(t=>{
+    document.getElementById('dt-'+t).classList.add('hidden');
+  });
+  document.getElementById('dt-'+tab).classList.remove('hidden');
+
+  const p = projects.find(x=>x.id===curProjId);
+  if(!p) return;
+
+  if(tab==='overview')   renderOverview(p);
+  if(tab==='documents')  renderDocuments(p);
+  if(tab==='activity')   renderProjectActivity(p);
+  if(tab==='reports')    renderReports(p);
+}
+
+function renderOverview(p){
+  if(!p.projStatus) p.projStatus='RECEIVED';
+  const age = Math.floor((Date.now()-p.createdAt)/864e5);
+  const labelMap = {RECEIVED:'📬 Received',HOLD:'⏸ On Hold',CANCELLED:'❌ Cancelled'};
+  const colorMap = {RECEIVED:'var(--success)',HOLD:'var(--warn)',CANCELLED:'var(--danger)'};
+  const statusColor = colorMap[p.projStatus]||'var(--success)';
+
+  document.getElementById('dt-overview').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
+      ${[
+        ['SO Number',    p.soNo],
+        ['Client',       p.client],
+        ['Equipment',    p.equipment],
+        ['Capacity',     p.capacity||'N/A'],
+        ['Priority',     p.priority],
+        ['Age',          age+' days'],
+        ['Total Docs',   p.documents.length],
+        ['Closed Docs',  p.documents.filter(d=>d.stage==='CLOSED').length],
+      ].map(([l,v])=>`<div class="info-card"><div class="info-lbl">${l}</div><div class="info-val" style="font-size:16px;">${v}</div></div>`).join('')}
+      <div class="info-card" style="border-left:4px solid ${statusColor};">
+        <div class="info-lbl">Project Status</div>
+        <div class="info-val" style="font-size:15px;color:${statusColor};">${labelMap[p.projStatus]||p.projStatus}</div>
+      </div>
+    </div>
+    ${p.statusReason?`
+      <div style="background:#fff7ed;border:2px solid var(--warn);border-radius:12px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--warn);margin-bottom:6px;">📝 Status Reason</div>
+        <div style="font-size:14px;">${p.statusReason}</div>
+        ${p.statusChangedAt?`<div style="font-size:11px;color:var(--muted);margin-top:6px;">Changed: ${fmtDate(p.statusChangedAt)}</div>`:''}
+      </div>`:''}
+    <button class="btn btn-sec btn-sm" onclick="openEditProjectModal()">✏️ Edit Project Details</button>
+  `;
+}
+
+// ═══════════════════════════════════════
+//  DOCUMENTS TAB
+// ═══════════════════════════════════════
+function renderDocuments(p){
+  const sorted = [...p.documents].sort((a,b)=>b.createdAt-a.createdAt);
+  const html = sorted.length ? sorted.map(d=>renderDocCard(d)).join('') :
+    `<div class="empty"><div class="empty-ico">📂</div>No documents yet. Click Add Document.</div>`;
+
+  document.getElementById('dt-documents').innerHTML = `
+    <div style="margin-bottom:18px;">
+      <button class="btn btn-p" onclick="openAddDocModal()">+ Add Document</button>
+    </div>
+    ${html}`;
+}
+
+function renderDocCard(doc){
+  const days = Math.floor((Date.now()-doc.stageEnteredAt)/864e5);
+  const pct  = stageProgress(doc.stage);
+  const lbl  = SL[doc.stage]||doc.stage;
+  const delayed = isDelayed(doc);
+
+  const lastClar = doc.clarifications?.length ? doc.clarifications[doc.clarifications.length-1] : null;
+  const clarBox  = lastClar && doc.needsClarification ? `
+    <div class="clar-note">
+      <div class="clar-note-lbl">⚠️ NEEDS CLARIFICATION</div>
+      <div style="font-size:13px;">${lastClar.note}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">By ${lastClar.by} · ${timeAgo(lastClar.ts)}</div>
+    </div>` : '';
+
+  const stageBtn = doc.needsClarification
+    ? `<button class="btn btn-sec btn-sm" disabled style="opacity:.4;cursor:not-allowed;" title="Resolve clarification first">Change Status</button>`
+    : `<button class="btn btn-sec btn-sm" onclick="openStatusModal('${doc.id}')">Change Status</button>`;
+
+  return `<div class="doc-card${doc.needsClarification?' needs-clar':''}" id="dc-${doc.id}">
+    <div class="type-ribbon ${doc.type==='SO'?'r-so':'r-offer'}">${doc.type}</div>
+
+    <div class="doc-name">${doc.name}</div>
+    <div class="doc-meta">
+      <div class="doc-meta-i">📋 <span class="dwg-no">${doc.drawingNumber}</span></div>
+      <div class="doc-meta-i">Rev: <strong>${doc.revision}</strong></div>
+      <div class="doc-meta-i">${days} day${days!==1?'s':''} in stage${delayed?' <span style="color:var(--danger);font-weight:700;">⚠ Delayed</span>':''}</div>
+    </div>
+
+    <div class="assign-strip">
+      <div><div class="as-lbl">Assigned By</div><div class="as-val">${doc.assignedBy||'—'}</div></div>
+      <div><div class="as-lbl">Assigned To</div><div class="as-val">${doc.assignedTo||'—'}</div></div>
+      <div><div class="as-lbl">Releasing To</div><div class="as-val release">${doc.releasingTo||'—'}</div></div>
+    </div>
+
+    ${clarBox}
+
+    <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span class="badge ${stageBadgeCls(doc.stage)}">${lbl}</span>
+      <span style="font-size:11px;color:var(--muted);">${pct}%</span>
+    </div>
+    ${doc.needsClarification?'<span class="badge b-yellow" style="margin-top:4px;">⚠ Clarification Needed</span>':''}
+
+    <div class="doc-actions">
+      <button class="btn btn-warn btn-sm" onclick="openClarModal('${doc.id}')">📝 Clarification</button>
+      ${stageBtn}
+      <button class="btn btn-p btn-sm" onclick="doRevision('${doc.id}')">↑ New Revision</button>
+      <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${doc.id}')">🗑 Delete</button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════
+//  PROJECT ACTIVITY TAB
+// ═══════════════════════════════════════
+function renderProjectActivity(p){
+  // collect all doc logs + project-level events from globalLog
+  const projLogs = globalLog.filter(e=>e.detail?.projId===p.id || e.detail?.soNo===p.soNo);
+  const el = document.getElementById('dt-activity');
+  el.innerHTML = projLogs.length ? projLogs.map(e=>actEntry(e)).join('') :
+    `<div class="empty"><div class="empty-ico">📋</div>No activity yet</div>`;
+}
+
+function renderReports(p){
+  const el = document.getElementById('dt-reports');
+  const r  = p.commReports||[];
+  el.innerHTML = `
+    <div style="margin-bottom:18px;">
+      <button class="btn btn-p" onclick="genCommReport()">+ New Commissioning Report</button>
+    </div>
+    ${r.length ? r.slice().reverse().map((rep,i)=>`
+      <div style="background:var(--card);border:2px solid var(--bdr);border-radius:14px;padding:20px;margin-bottom:14px;">
+        <div style="font-weight:700;margin-bottom:10px;">Report #${rep.num} — ${fmtDate(rep.ts)}</div>
+        <div style="white-space:pre-wrap;line-height:1.8;font-size:14px;">${rep.content}</div>
+      </div>`).join('') :
+      `<div class="empty"><div class="empty-ico">📊</div>No commissioning reports yet</div>`}`;
+}
+
+// ═══════════════════════════════════════
+//  GLOBAL ACTIVITY LOG
+// ═══════════════════════════════════════
+function renderGlobalActivity(){
+  const el = document.getElementById('global-activity');
+  el.innerHTML = globalLog.length ? globalLog.map(e=>actEntry(e)).join('') :
+    `<div class="empty"><div class="empty-ico">📋</div>No activity yet</div>`;
+}
+
+function actEntry(e){
+  const {dot,ab} = typeStyle(e.type);
+  const d = e.detail||{};
+  let details='';
+  if(d.doc)        details+=`<div class="act-detail">📄 ${d.doc}${d.drawing?' · '+d.drawing:''}</div>`;
+  if(d.type)       details+=`<div class="act-detail">Type: <strong>${d.type}</strong></div>`;
+  if(d.from&&d.to) details+=`<div class="act-detail">Stage: <strong>${SL[d.from]||d.from}</strong> → <strong>${SL[d.to]||d.to}</strong></div>`;
+  if(d.revision)   details+=`<div class="act-detail">Revision: ${d.oldRev} → <strong>${d.revision}</strong></div>`;
+  if(d.assignedBy) details+=`<div class="act-detail">Assigned By: ${d.assignedBy}</div>`;
+  if(d.assignedTo) details+=`<div class="act-detail">Assigned To: ${d.assignedTo}</div>`;
+  if(d.releasingTo)details+=`<div class="act-detail">Releasing To: <span style="color:var(--so)">${d.releasingTo}</span></div>`;
+  if(d.sentBackTo) details+=`<div class="act-detail">Sent Back To: ${d.sentBackTo}</div>`;
+  if(d.remarks)    details+=`<div class="act-detail">Remarks: ${d.remarks}</div>`;
+  if(d.note)       details+=`<div class="act-detail">Note: ${d.note}</div>`;
+  if(d.soNo)       details+=`<div class="act-detail">Project: ${d.soNo}</div>`;
+  return `<div class="act-item">
+    <div class="act-dot ${dot}"></div>
+    <div style="flex:1;">
+      <span class="act-badge ${ab}">${e.type.toUpperCase()}</span>
+      <div class="act-action">${e.action}</div>
+      ${details}
+      <div class="act-time">🕐 ${fmtDate(e.ts)}</div>
+    </div>
+  </div>`;
+}
+
+function typeStyle(t){
+  return ({
+    add:     {dot:'d-add',    ab:'ab-add'},
+    status:  {dot:'d-status', ab:'ab-status'},
+    release: {dot:'d-release',ab:'ab-release'},
+    delete:  {dot:'d-delete', ab:'ab-delete'},
+    revision:{dot:'d-revision',ab:'ab-revision'},
+    clarify: {dot:'d-clarify',ab:'ab-clarify'},
+    project: {dot:'d-project',ab:'ab-project'},
+  })[t]||{dot:'d-add',ab:'ab-add'};
+}
+
+// ═══════════════════════════════════════
+//  PURCHASE TRACKING
+// ═══════════════════════════════════════
+function renderPurchase(){
+  const items = projects.flatMap(p=>
+    p.documents.filter(d=>['PURCHASE_REVIEW','VENDOR_DISCUSSION','PURCHASE_APPROVED','RELEASED_TO_PURCHASE'].includes(d.stage))
+    .map(d=>({...d, proj:p}))
+  );
+  const el = document.getElementById('pur-list');
+  el.innerHTML = items.length ? items.map(d=>`
+    <div class="pur-card" onclick="openProject('${d.proj.id}')">
+      <div class="pur-proj">${d.proj.soNo} — ${d.proj.client}</div>
+      <div class="pur-name">${d.name}</div>
+      <div class="assign-strip">
+        <div><div class="as-lbl">Drawing No</div><div class="as-val dwg-no">${d.drawingNumber}</div></div>
+        <div><div class="as-lbl">Assigned To</div><div class="as-val">${d.assignedTo||'—'}</div></div>
+        <div><div class="as-lbl">Stage</div><div><span class="badge ${stageBadgeCls(d.stage)}">${SL[d.stage]||d.stage}</span></div></div>
+      </div>
+    </div>`).join('') :
+    `<div class="empty"><div class="empty-ico">🛒</div>No documents in Purchase currently</div>`;
+}
+
+// ═══════════════════════════════════════
+//  EDIT PROJECT
+// ═══════════════════════════════════════
+let editingProjStatus = 'RECEIVED';
+
+function openEditProjectModal(){
+  const p = projects.find(x=>x.id===curProjId);
+  if(!p) return;
+  if(!p.projStatus) p.projStatus='RECEIVED';
+
+  document.getElementById('ep-so').value     = p.soNo;
+  document.getElementById('ep-client').value = p.client;
+  document.getElementById('ep-equip').value  = p.equipment;
+  document.getElementById('ep-cap').value    = p.capacity||'';
+  document.getElementById('ep-pri').value    = p.priority;
+  document.getElementById('ep-reason').value = p.statusReason||'';
+
+  editingProjStatus = p.projStatus;
+  renderProjStatusBtns(p.projStatus);
+
+  // show reason box if hold/cancelled
+  const wrap = document.getElementById('ep-reason-wrap');
+  wrap.style.display = (p.projStatus==='HOLD'||p.projStatus==='CANCELLED') ? 'block' : 'none';
+
+  openModal('m-editproject');
+}
+
+function renderProjStatusBtns(sel){
+  const configs = {
+    RECEIVED:{ border:'var(--success)', bg:'rgba(16,185,129,.08)', txt:'var(--success)' },
+    HOLD:    { border:'var(--warn)',    bg:'rgba(245,158,11,.08)',  txt:'var(--warn)'    },
+    CANCELLED:{ border:'var(--danger)', bg:'rgba(239,68,68,.08)',   txt:'var(--danger)'  },
+  };
+  ['RECEIVED','HOLD','CANCELLED'].forEach(s=>{
+    const el = document.getElementById('psb-'+s);
+    if(!el) return;
+    if(s===sel){
+      el.style.borderColor   = configs[s].border;
+      el.style.background    = configs[s].bg;
+      el.style.color         = configs[s].txt;
+      el.style.fontWeight    = '700';
+    } else {
+      el.style.borderColor = 'var(--bdr)';
+      el.style.background  = 'transparent';
+      el.style.color       = 'var(--txt)';
+      el.style.fontWeight  = '500';
+    }
+  });
+}
+
+function selectProjStatus(s){
+  editingProjStatus = s;
+  renderProjStatusBtns(s);
+  const wrap = document.getElementById('ep-reason-wrap');
+  wrap.style.display = (s==='HOLD'||s==='CANCELLED') ? 'block' : 'none';
+}
+
+function saveProjectEdits(){
+  const soNo  = g('ep-so'), client=g('ep-client'), equip=g('ep-equip');
+  if(!soNo||!client||!equip) return toast('Fill required fields','err');
+
+  const p = projects.find(x=>x.id===curProjId);
+  if(!p) return;
+
+  const oldStatus = p.projStatus||'RECEIVED';
+  const statusChanged = editingProjStatus !== oldStatus;
+  const reason = g('ep-reason');
+
+  // Require reason if hold or cancelled
+  if((editingProjStatus==='HOLD'||editingProjStatus==='CANCELLED') && !reason)
+    return toast('Please provide a reason for this status','err');
+
+  p.soNo      = soNo;
+  p.client    = client;
+  p.equipment = equip;
+  p.capacity  = g('ep-cap');
+  p.priority  = g('ep-pri');
+  p.projStatus= editingProjStatus;
+
+  if(statusChanged){
+    p.statusReason    = reason||'';
+    p.statusChangedAt = Date.now();
+    gLog('project',
+      `Project ${p.soNo} status changed: ${oldStatus} → ${editingProjStatus}`,
+      { soNo:p.soNo, client:p.client, from:oldStatus, to:editingProjStatus, reason:reason||undefined, projId:p.id }
+    );
+  } else {
+    gLog('project',`Project ${p.soNo} details updated`,
+      { soNo:p.soNo, client:p.client, equipment:p.equipment, priority:p.priority, projId:p.id });
+  }
+
+  save();
+  closeModal('m-editproject');
+  openProject(p.id); // refresh header + info grid
+  toast('Project updated!','ok');
+}
+
+// ═══════════════════════════════════════
+//  CREATE PROJECT
+// ═══════════════════════════════════════
+function openNewProjectModal(){
+  ['np-so','np-client','np-equip','np-cap'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('np-pri').value='MEDIUM';
+  openModal('m-newproject');
+}
+
+function createProject(){
+  const soNo   = g('np-so'),   client = g('np-client'), equip = g('np-equip');
+  const cap    = g('np-cap'),  pri    = g('np-pri');
+  if(!soNo||!client||!equip) return toast('Fill required fields','err');
+
+  const p = {
+    id:uid(), soNo, client, equipment:equip, capacity:cap,
+    priority:pri, createdAt:Date.now(), documents:[], commReports:[],
+    projStatus:'RECEIVED', statusReason:'', statusChangedAt:null
+  };
+  projects.push(p);
+  gLog('project',`Project created: ${soNo} — ${client}`,{soNo, client});
+  save(); closeModal('m-newproject');
+  nav('dashboard'); toast(`Project ${soNo} created!`,'ok');
+}
+
+// ═══════════════════════════════════════
+//  ADD DOCUMENT
+// ═══════════════════════════════════════
+function openAddDocModal(){
+  selType('SO');
+  ['ad-name','ad-dwg','ad-by','ad-to','ad-rel'].forEach(id=>document.getElementById(id).value='');
+  openModal('m-adddoc');
+}
+
+function selType(t){
+  docType=t;
+  document.getElementById('tb-so').className    = 'type-btn'+(t==='SO'   ?' sel-so':'');
+  document.getElementById('tb-offer').className = 'type-btn'+(t==='OFFER'?' sel-offer':'');
+}
+
+function addDocument(){
+  const name=g('ad-name'), dwg=g('ad-dwg');
+  if(!name||!dwg) return toast('Name and drawing number required','err');
+
+  const p = projects.find(x=>x.id===curProjId);
+  if(!p) return;
+
+  const now=Date.now();
+  const doc={
+    id:uid(), name, drawingNumber:dwg,
+    type:docType, revision:'R0',
+    stage:docType==='SO'?'SO_CONFIRMED':'OFFER_STAGE',
+    stageEnteredAt:now, createdAt:now,
+    assignedBy:g('ad-by')||'—', assignedTo:g('ad-to')||'—', releasingTo:g('ad-rel')||'—',
+    needsClarification:false, clarifications:[], actLog:[]
+  };
+
+  p.documents.push(doc);
+  gLog('add',`Document added: "${name}" [${docType}]`,{
+    doc:name, drawing:dwg, type:docType, projId:p.id, soNo:p.soNo,
+    assignedBy:doc.assignedBy, assignedTo:doc.assignedTo, releasingTo:doc.releasingTo
+  });
+
+  save(); closeModal('m-adddoc');
+  detailTab('documents', document.querySelector('#detail-tabs .tab:nth-child(2)'));
+
+  // scroll new card into view
+  setTimeout(()=>{
+    const c=document.getElementById('dc-'+doc.id);
+    if(c) c.scrollIntoView({behavior:'smooth',block:'start'});
+  },200);
+
+  toast(`Document "${name}" added`,'ok');
+}
+
+// ═══════════════════════════════════════
+//  CHANGE STATUS
+// ═══════════════════════════════════════
+function openStatusModal(docId){
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===docId);
+  if(!doc) return;
+  if(doc.needsClarification) return toast('Resolve clarification first','err');
+
+  curDocId=docId;
+  document.getElementById('cs-current').value = SL[doc.stage]||doc.stage;
+  document.getElementById('cs-new').value      = doc.stage;
+  document.getElementById('cs-rel').value      = doc.releasingTo||'';
+  document.getElementById('cs-ato').value      = '';
+  document.getElementById('cs-rem').value      = '';
+  openModal('m-status');
+}
+
+function applyStatus(){
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===curDocId);
+  if(!doc) return;
+
+  const newStage=g('cs-new'), rel=g('cs-rel'), ato=g('cs-ato'), rem=g('cs-rem');
+  const oldStage=doc.stage;
+
+  doc.stage=newStage; doc.stageEnteredAt=Date.now();
+  if(rel) doc.releasingTo=rel;
+  if(ato) doc.assignedTo=ato;
+
+  const isRel=['INTERNAL_RELEASE','RELEASED_TO_PURCHASE'].includes(newStage);
+  gLog(isRel?'release':'status',
+    `"${doc.name}" → ${SL[newStage]||newStage}`,
+    {doc:doc.name, drawing:doc.drawingNumber, from:oldStage, to:newStage,
+     releasingTo:doc.releasingTo, assignedTo:doc.assignedTo,
+     remarks:rem||undefined, projId:p.id, soNo:p.soNo}
+  );
+
+  save(); closeModal('m-status');
+  const t=document.querySelector('#detail-tabs .tab.active');
+  detailTab('documents',t);
+  toast('Status updated!','ok');
+}
+
+// ═══════════════════════════════════════
+//  REVISION
+// ═══════════════════════════════════════
+function doRevision(docId){
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===docId);
+  if(!doc) return;
+  const oldRev=doc.revision, num=parseInt(oldRev.replace('R',''))||0;
+  doc.revision=`R${num+1}`;
+  gLog('revision',`"${doc.name}" revision: ${oldRev} → ${doc.revision}`,
+    {doc:doc.name, drawing:doc.drawingNumber, oldRev, revision:doc.revision, projId:p.id, soNo:p.soNo});
+  save();
+  const t=document.querySelector('#detail-tabs .tab.active');
+  detailTab('documents',t);
+  toast(`Revision → ${doc.revision}`,'ok');
+}
+
+// ═══════════════════════════════════════
+//  CLARIFICATION
+// ═══════════════════════════════════════
+function openClarModal(docId){
+  curDocId=docId;
+  document.getElementById('cl-notes').value='';
+  openModal('m-clar');
+}
+
+function markClarified(){
+  const note=g('cl-notes'); if(!note) return toast('Add notes first','err');
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===curDocId); if(!doc) return;
+
+  doc.clarifications.push({note, status:'CLARIFIED', by:doc.assignedTo||'You', ts:Date.now()});
+  doc.needsClarification=false;
+
+  gLog('clarify',`"${doc.name}" — Clarification resolved`,
+    {doc:doc.name, drawing:doc.drawingNumber, note, projId:p.id, soNo:p.soNo});
+  save(); closeModal('m-clar');
+  const t=document.querySelector('#detail-tabs .tab.active');
+  detailTab('documents',t);
+  toast('Clarified! Stage change unlocked. Use share buttons to notify team.','ok');
+}
+
+function sendBack(){
+  const note=g('cl-notes'); if(!note) return toast('Add notes first','err');
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===curDocId); if(!doc) return;
+
+  const sentTo=doc.assignedBy||'Assignor';
+  doc.clarifications.push({note, status:'SENT_BACK', by:doc.assignedTo||'You', sentBackTo:sentTo, ts:Date.now()});
+  doc.needsClarification=true;
+  const tmp=doc.assignedBy; doc.assignedBy=doc.assignedTo; doc.assignedTo=tmp; // swap
+
+  gLog('clarify',`"${doc.name}" sent back → ${sentTo}`,
+    {doc:doc.name, drawing:doc.drawingNumber, note, sentBackTo:sentTo, projId:p.id, soNo:p.soNo});
+  save(); closeModal('m-clar');
+  const t=document.querySelector('#detail-tabs .tab.active');
+  detailTab('documents',t);
+  toast(`Sent back to ${sentTo}. Use share buttons to notify.`,'ok');
+}
+
+// ═══════════════════════════════════════
+//  SHARING MESSAGES
+// ═══════════════════════════════════════
+function shareViaMail(type){
+  const msg = generateShareMessage(type);
+  if(!msg) return;
+  
+  const subject = encodeURIComponent(msg.subject);
+  const body = encodeURIComponent(msg.body);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+function shareViaTeams(type){
+  const msg = generateShareMessage(type);
+  if(!msg) return;
+  
+  // Microsoft Teams deep link
+  const text = encodeURIComponent(`${msg.subject}\n\n${msg.body}`);
+  window.open(`https://teams.microsoft.com/share?msgText=${text}`, '_blank');
+}
+
+function copyShareMessage(type){
+  const msg = generateShareMessage(type);
+  if(!msg) return;
+  
+  const fullMessage = `${msg.subject}\n\n${msg.body}`;
+  navigator.clipboard.writeText(fullMessage).then(()=>{
+    toast('Message copied! Paste in email or Teams','ok');
+  }).catch(()=>{
+    // Fallback
+    const textarea = document.createElement('textarea');
+    textarea.value = fullMessage;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    toast('Message copied!','ok');
+  });
+}
+
+function generateShareMessage(type){
+  const note = g('cl-notes');
+  if(!note) {
+    toast('Please add clarification notes first','err');
+    return null;
+  }
+
+  const p = projects.find(x=>x.id===curProjId);
+  const doc = p?.documents.find(d=>d.id===curDocId);
+  if(!p || !doc) return null;
+
+  const user = JSON.parse(localStorage.getItem(USER_KEY)||'{}');
+  const from = user.name || 'TULUVA';
+
+  if(type === 'clarified'){
+    return {
+      subject: `✅ Clarification Resolved: ${doc.drawingNumber} - ${doc.name}`,
+      body: `Hi Team,
+
+The clarification for the following document has been resolved and is ready to proceed:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 PROJECT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Project: ${p.soNo}
+Client: ${p.client}
+Equipment: ${p.equipment}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 DOCUMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Document: ${doc.name}
+Drawing No: ${doc.drawingNumber}
+Revision: ${doc.revision}
+Current Stage: ${SL[doc.stage]||doc.stage}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CLARIFICATION NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${note}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STATUS: Ready to proceed
+Clarified by: ${from}
+Date: ${new Date().toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}
+
+Please review and proceed with the next steps.
+
+Best regards,
+${from}
+Workflow Controller`
+    };
+  }
+
+  if(type === 'sendback'){
+    const sentTo = doc.assignedBy || 'Assignor';
+    return {
+      subject: `⚠️ Clarification Required: ${doc.drawingNumber} - ${doc.name}`,
+      body: `Hi ${sentTo},
+
+I need clarification on the following document before proceeding:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 PROJECT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Project: ${p.soNo}
+Client: ${p.client}
+Equipment: ${p.equipment}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 DOCUMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Document: ${doc.name}
+Drawing No: ${doc.drawingNumber}
+Revision: ${doc.revision}
+Current Stage: ${SL[doc.stage]||doc.stage}
+Assigned To: ${doc.assignedTo}
+Releasing To: ${doc.releasingTo}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CLARIFICATION NEEDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${note}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTION REQUIRED: Please review and provide clarification
+Sent back by: ${from}
+Date: ${new Date().toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}
+
+Once clarified, I can proceed with the next steps.
+
+Best regards,
+${from}
+Workflow Controller`
+    };
+  }
+
+  return null;
+}
+
+// ═══════════════════════════════════════
+//  DELETE
+// ═══════════════════════════════════════
+function openDeleteModal(docId){
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===docId); if(!doc) return;
+  delDocId=docId;
+  document.getElementById('del-name').textContent=`${doc.name} (${doc.drawingNumber})`;
+  openModal('m-delete');
+}
+
+function confirmDelete(){
+  const p=projects.find(x=>x.id===curProjId);
+  const doc=p?.documents.find(d=>d.id===delDocId); if(!doc) return;
+
+  gLog('delete',`Document DELETED: "${doc.name}"`,
+    {doc:doc.name, drawing:doc.drawingNumber, type:doc.type, revision:doc.revision,
+     stage:SL[doc.stage]||doc.stage, assignedBy:doc.assignedBy, assignedTo:doc.assignedTo,
+     deletedBy:'Koushik Rai', projId:p.id, soNo:p.soNo});
+
+  p.documents=p.documents.filter(d=>d.id!==delDocId);
+  delDocId=null;
+  save(); closeModal('m-delete');
+  const t=document.querySelector('#detail-tabs .tab.active');
+  detailTab('documents',t);
+  toast('Document deleted. Logged in Activity.','ok');
+}
+
+// ═══════════════════════════════════════
+//  COMMISSIONING REPORT
+// ═══════════════════════════════════════
+function genCommReport(){
+  const p=projects.find(x=>x.id===curProjId); if(!p) return;
+  if(!p.commReports) p.commReports=[];
+  const num=p.commReports.length+1;
+  p.commReports.push({
+    num, ts:Date.now(),
+    content:`Commissioning Report #${num}\nProject: ${p.soNo}\nClient: ${p.client}\n\nEnter commissioning feedback here...`
+  });
+  gLog('project',`Commissioning Report #${num} created for ${p.soNo}`,{soNo:p.soNo, projId:p.id});
+  save();
+  const tabs=document.querySelectorAll('#detail-tabs .tab');
+  detailTab('reports', tabs[3]);
+  toast(`Report #${num} created`,'ok');
+}
+
+// ═══════════════════════════════════════
+//  AI FEATURES
+// ═══════════════════════════════════════
+function renderAIView(){
+  document.getElementById('ai-output').innerHTML='';
+}
+
+async function runAIInsights(){
+  const el=document.getElementById('ai-output');
+  el.innerHTML=`<div style="padding:30px;text-align:center;color:var(--muted);">⏳ Analysing workflow...</div>`;
+
+  const d=allDocs();
+  const prompt=`You are an engineering project analyst. Analyse this workflow data and give actionable insights.
+
+Projects: ${projects.length}
+Documents: ${d.length}
+In Design: ${d.filter(x=>x.stage==='DESIGN').length}
+With Client: ${d.filter(x=>['CLIENT_APPROVAL','CLIENT_COMMENTED'].includes(x.stage)).length}
+In Purchase/Vendor: ${d.filter(x=>['PURCHASE_REVIEW','VENDOR_DISCUSSION'].includes(x.stage)).length}
+Needs Clarification: ${d.filter(x=>x.needsClarification).length}
+Released: ${d.filter(x=>['INTERNAL_RELEASE','RELEASED_TO_PURCHASE'].includes(x.stage)).length}
+
+Provide:
+1. Workflow Health Score (out of 10)
+2. Current Bottlenecks
+3. Predicted Delays
+4. Top 3 Recommendations
+5. Historical Pattern Insights
+
+Be concise and direct.`;
+
+  try{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+    });
+    const data=await r.json();
+    el.innerHTML=`<div class="ai-result">${data.content[0].text}</div>`;
+  } catch(e){
+    el.innerHTML=`<div class="ai-result" style="color:var(--danger);">AI unavailable. Check connection.</div>`;
+  }
+}
+
+async function runProjectAI(){
+  const p=projects.find(x=>x.id===curProjId); if(!p) return;
+  openModal('m-ai');
+  document.getElementById('ai-modal-content').innerHTML=`<div style="padding:30px;text-align:center;">⏳ Generating report...</div>`;
+
+  const similar=projects.filter(x=>x.client===p.client||x.equipment.split(' ')[0]===p.equipment.split(' ')[0]);
+
+  const prompt=`Generate a professional engineering project report.
+
+Project: ${p.soNo} | ${p.client} | ${p.equipment} | Priority: ${p.priority}
+
+Documents (${p.documents.length}):
+${p.documents.map(d=>`- ${d.name} [${d.type}] ${d.drawingNumber}: ${SL[d.stage]||d.stage}, Rev ${d.revision}, Assigned to ${d.assignedTo}, Releasing to ${d.releasingTo}`).join('\n')}
+
+Similar Past Projects: ${similar.length}
+${similar.filter(x=>x.id!==p.id).map(x=>`- ${x.soNo} (${x.documents.length} docs)`).join('\n')||'None'}
+
+Provide:
+1. Executive Summary
+2. Current Progress Assessment
+3. Documents Needing Attention (based on stage/delays)
+4. Lessons from Similar Projects
+5. Predicted Timeline
+6. Action Items (priority ordered)`;
+
+  try{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]})
+    });
+    const data=await r.json();
+    document.getElementById('ai-modal-content').innerHTML=`<div class="ai-result">${data.content[0].text}</div>`;
+  } catch(e){
+    document.getElementById('ai-modal-content').innerHTML=`<div class="ai-result" style="color:var(--danger);">AI unavailable.</div>`;
+  }
+}
+
+// ═══════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════
+function setTheme(t, el){
+  document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  applyTheme(t);
+  localStorage.setItem('ewc_theme',t);
+}
+
+function applyTheme(t){
+  if(t==='default') document.body.removeAttribute('data-theme');
+  else              document.body.setAttribute('data-theme',t);
+  // mark swatch
+  document.querySelectorAll('.theme-swatch').forEach(s=>s.classList.remove('active'));
+  const idx={default:0,green:1,purple:2,orange:3,dark:4}[t]??0;
+  document.querySelectorAll('.theme-swatch')[idx]?.classList.add('active');
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify({projects,globalLog},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`ewc-backup-${Date.now()}.json`; a.click();
+  toast('Data exported','ok');
+}
+
+function importData(e){
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      projects=d.projects||[]; globalLog=d.globalLog||[];
+      save(); nav('dashboard'); toast('Data imported','ok');
+    } catch{ toast('Invalid file','err'); }
+  };
+  r.readAsText(file);
+}
+
+function resetDemo(){
+  localStorage.removeItem(SK); localStorage.removeItem(LK);
+  projects=[]; globalLog=[];
+  loadDemo(); nav('dashboard'); toast('Demo data restored','ok');
+}
+
+// ═══════════════════════════════════════
+//  MODAL HELPERS
+// ═══════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+// Modals close ONLY via the ✕ button — clicking outside does nothing
+
+// ═══════════════════════════════════════
+//  UTILITY
+// ═══════════════════════════════════════
+function g(id){ return document.getElementById(id)?.value?.trim()||''; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+function fmtDate(ts){
+  return new Date(ts).toLocaleString('en-IN',{
+    day:'2-digit',month:'short',year:'numeric',
+    hour:'2-digit',minute:'2-digit',hour12:true
+  });
+}
+
+function timeAgo(ts){
+  const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60)    return s+'s ago';
+  if(s<3600)  return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+function stageBadgeCls(s){
+  return ({
+    CLOSED:'b-gray', APPROVED:'b-green', PURCHASE_APPROVED:'b-green',
+    INTERNAL_RELEASE:'b-green', RELEASED_TO_PURCHASE:'b-green',
+    CLIENT_COMMENTED:'b-red', VENDOR_DISCUSSION:'b-red', REVISION:'b-red',
+    CLIENT_APPROVAL:'b-yellow', PURCHASE_REVIEW:'b-yellow',
+    DESIGN:'b-yellow', RESUBMISSION:'b-yellow',
+    COMMISSIONING:'b-purple', OFFER_STAGE:'b-orange', OFFER_CLARIFICATION:'b-orange',
+    SO_CONFIRMED:'b-blue', SO_MEETING:'b-blue', CLIENT_SUBMISSION:'b-blue',
+    CLIENT_COMMENT:'b-orange', SO_CONFIRMED:'b-blue'
+  })[s]||'b-blue';
+}
+
+function priorityBadge(p){
+  return {LOW:'b-blue',MEDIUM:'b-yellow',HIGH:'b-red',CRITICAL:'b-red'}[p]||'b-blue';
+}
+
+function toast(msg,type){
+  const d=document.createElement('div');
+  d.className=`toast ${type==='ok'?'t-ok':'t-err'}`;
+  d.textContent=(type==='ok'?'✓ ':'✕ ')+msg;
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(),3000);
+}
+
+// ═══════════════════════════════════════
+//  USER PROFILE
+// ═══════════════════════════════════════
+const USER_KEY = 'ewc_user';
+
+function loadUserProfile(){
+  const stored = localStorage.getItem(USER_KEY);
+  const user   = stored ? JSON.parse(stored) : {name:'TULUVA', role:'Workflow Controller'};
+  applyUserToSidebar(user);
+}
+
+function applyUserToSidebar(user){
+  const initials = user.name.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('sb-avatar').textContent      = initials;
+  document.getElementById('sb-user-name').textContent   = user.name;
+  document.getElementById('sb-user-role').textContent   = user.role||'Workflow Controller';
+  // also update avatar preview if modal open
+  const prev = document.getElementById('eu-avatar-preview');
+  if(prev) prev.textContent = initials;
+}
+
+function toggleUserMenu(){
+  const menu    = document.getElementById('sb-user-menu');
+  const chevron = document.getElementById('sb-chevron');
+  const open    = menu.style.display === 'block';
+  menu.style.display    = open ? 'none'  : 'block';
+  chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+function openEditUserModal(){
+  const stored = localStorage.getItem(USER_KEY);
+  const user   = stored ? JSON.parse(stored) : {name:'TULUVA', role:'Workflow Controller'};
+  document.getElementById('eu-name').value = user.name;
+  document.getElementById('eu-role').value = user.role||'';
+  // update preview initials
+  const initials = user.name.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('eu-avatar-preview').textContent = initials;
+  // close dropdown
+  document.getElementById('sb-user-menu').style.display = 'none';
+  document.getElementById('sb-chevron').style.transform = 'rotate(0deg)';
+  openModal('m-edituser');
+}
+
+function saveUserProfile(){
+  const name = g('eu-name');
+  if(!name) return toast('Please enter your name','err');
+  const role = g('eu-role');
+  const user = {name, role};
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  applyUserToSidebar(user);
+  closeModal('m-edituser');
+  toast('Profile updated!','ok');
+}
+
+function confirmLogout(){
+  document.getElementById('sb-user-menu').style.display = 'none';
+  document.getElementById('sb-chevron').style.transform = 'rotate(0deg)';
+  openModal('m-logout');
+}
+
+function doLogout(){
+  closeModal('m-logout');
+  // Show a simple logged-out screen
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);font-family:-apple-system,sans-serif;">
+      <div style="text-align:center;padding:48px 40px;background:#fff;border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.12);max-width:380px;width:100%;">
+        <div style="font-size:52px;margin-bottom:16px;">👋</div>
+        <div style="font-size:22px;font-weight:800;margin-bottom:8px;color:#1e293b;">Logged Out</div>
+        <div style="font-size:14px;color:#64748b;margin-bottom:28px;">You have been logged out of<br><strong>Workflow Controller</strong></div>
+        <button onclick="location.reload()" style="padding:12px 32px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">Log Back In</button>
+        <div style="font-size:11px;color:#94a3b8;margin-top:20px;">Designed & Built by TULUVA</div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════
+//  START
+// ═══════════════════════════════════════
+init();
+</script>
+<!-- EDIT USER MODAL -->
+<div id="m-edituser" class="modal hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <div class="modal-title">Edit Profile</div>
+      <button class="x-btn" onclick="closeModal('m-edituser')">✕</button>
+    </div>
+    <div style="display:flex;justify-content:center;margin-bottom:20px;">
+      <div id="eu-avatar-preview" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--sec));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:26px;">T</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Your Name <span>*</span></label>
+      <input class="fc" id="eu-name" placeholder="Enter your name">
+    </div>
+    <div class="fg">
+      <label class="fl">Role / Designation</label>
+      <input class="fc" id="eu-role" placeholder="e.g. Design Engineer">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-p" onclick="saveUserProfile()" style="flex:1;">Save</button>
+      <button class="btn btn-sec" onclick="closeModal('m-edituser')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGOUT CONFIRM MODAL -->
+<div id="m-logout" class="modal hidden">
+  <div class="modal-box" style="max-width:380px;">
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:42px;margin-bottom:12px;">👋</div>
+      <div class="modal-title" style="margin-bottom:10px;">Log Out?</div>
+      <div style="color:var(--muted);font-size:14px;margin-bottom:24px;">Your data is saved. You can log back in anytime.</div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn btn-danger" onclick="doLogout()">Yes, Log Out</button>
+        <button class="btn btn-sec" onclick="closeModal('m-logout')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Credit Footer -->
+<div style="
+  position:fixed; bottom:0; left:var(--sidebar-w); right:0;
+  padding:8px 24px;
+  background:var(--card);
+  border-top:1px solid var(--bdr);
+  display:flex; align-items:center; justify-content:center;
+  gap:8px;
+  font-size:12px;
+  color:var(--muted);
+  z-index:50;
+  transition:left .3s;
+" id="credit-bar">
+  <span style="opacity:.5;">⚙️</span>
+  <span>Designed & Built by</span>
+  <span style="font-weight:800; color:var(--p); letter-spacing:.5px;">TULUVA</span>
+  <span style="opacity:.3;">|</span>
+  <span style="opacity:.5;">Workflow Controller</span>
+</div>
+
+<script>
+// keep credit bar in sync with sidebar toggle
+const _origToggle = toggleSidebar;
+</script>
+</body>
+</html>
