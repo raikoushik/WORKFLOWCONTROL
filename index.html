@@ -14,7 +14,7 @@
 <title>Workflow Controller</title>
 
 <!-- DOMPurify Library for XSS Protection -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js" integrity="sha384-9DaKX+GvgHaqYdGwFr3+2pV7X9LYFPvq/8dUlPwgJ7E1s5PKPJ4qGpRqGQhTMlEi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js" integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb" crossorigin="anonymous"></script>
 <style>
 /* ═══════════════════════════════════════════
    RESET & VARIABLES
@@ -2315,8 +2315,10 @@ Be concise and direct.`;
     const r=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST", 
       headers:{
-        "Content-Type":"application/json",
-        "x-api-key": "YOUR_API_KEY_HERE" // SECURITY: Store API key server-side, use backend proxy
+        "Content-Type":"application/json"
+        // SECURITY NOTE: API key should be stored server-side
+        // Implement backend proxy for production use
+        // "x-api-key": process.env.CLAUDE_API_KEY
       },
       body:JSON.stringify({
         model:"claude-sonnet-4-20250514",
@@ -2364,8 +2366,10 @@ Provide:
     const r=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST", 
       headers:{
-        "Content-Type":"application/json",
-        "x-api-key": "YOUR_API_KEY_HERE" // SECURITY: Store API key server-side, use backend proxy
+        "Content-Type":"application/json"
+        // SECURITY NOTE: API key should be stored server-side
+        // Implement backend proxy for production use
+        // "x-api-key": process.env.CLAUDE_API_KEY
       },
       body:JSON.stringify({
         model:"claude-sonnet-4-20250514",
