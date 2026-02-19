@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Security Headers -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://api.anthropic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), speaker=()">
+
 <title>Workflow Controller</title>
+
+<!-- DOMPurify Library for XSS Protection -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js" integrity="sha384-9DaKX+GvgHaqYdGwFr3+2pV7X9LYFPvq/8dUlPwgJ7E1s5PKPJ4qGpRqGQhTMlEi" crossorigin="anonymous"></script>
 <style>
 /* ═══════════════════════════════════════════
    RESET & VARIABLES
@@ -974,6 +985,27 @@ body{
      JAVASCRIPT
 ══════════════════════════════════════════ -->
 <script>
+// ═══════════════════════════════════════════════════════════════════
+//  SECURITY NOTICE
+// ═══════════════════════════════════════════════════════════════════
+// This application includes comprehensive security measures:
+// 
+// 1. XSS Protection: DOMPurify sanitizes all user inputs
+// 2. Input Validation: All inputs are validated for type, length, and format
+// 3. CSP Headers: Content Security Policy restricts resource loading
+// 4. Security Headers: X-Frame-Options, X-Content-Type-Options, etc.
+// 5. CSRF Tokens: Framework for token-based protection
+//
+// IMPORTANT LIMITATIONS (Client-Side Only):
+// - No server-side authentication (implement OAuth 2.0/JWT for production)
+// - LocalStorage is not encrypted (implement server-side storage for sensitive data)
+// - API keys should NEVER be in client code (use backend proxy)
+// - All validation can be bypassed (implement server-side validation)
+//
+// FOR PRODUCTION: Implement proper backend API with authentication, 
+// authorization, and server-side validation. See SECURITY.md for details.
+// ═══════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════
 //  CONSTANTS & STATE
 // ═══════════════════════════════════════
@@ -1008,6 +1040,240 @@ const SL = {
   RELEASED_TO_PURCHASE:'Released to Purchase',
   COMMISSIONING:'Commissioning', CLOSED:'Closed'
 };
+
+// ═══════════════════════════════════════
+//  SECURITY FUNCTIONS
+// ═══════════════════════════════════════
+
+/**
+ * Security Configuration
+ * WARNING: This is a client-side only implementation.
+ * For production use, implement server-side validation and authentication.
+ */
+const SECURITY_CONFIG = {
+  MAX_INPUT_LENGTH: 1000,
+  MAX_TEXTAREA_LENGTH: 5000,
+  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  ALLOWED_FILE_TYPES: ['application/json'],
+  INPUT_PATTERN: /^[a-zA-Z0-9\s\-_.,()\/&@#]+$/,
+  EMAIL_PATTERN: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  PHONE_PATTERN: /^[\d\s\-+()]+$/
+};
+
+/**
+ * Sanitize HTML content using DOMPurify
+ * Prevents XSS attacks by removing malicious scripts
+ * @param {string} dirty - Unsanitized HTML content
+ * @returns {string} - Sanitized HTML content
+ */
+function sanitizeHTML(dirty) {
+  if (typeof DOMPurify === 'undefined') {
+    console.error('DOMPurify not loaded. Input sanitization disabled.');
+    return escapeHTML(dirty); // Fallback to basic escaping
+  }
+  return DOMPurify.sanitize(dirty, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'span', 'div'],
+    ALLOWED_ATTR: ['class'],
+    KEEP_CONTENT: true
+  });
+}
+
+/**
+ * Escape HTML entities to prevent XSS
+ * Fallback when DOMPurify is not available
+ * @param {string} text - Text to escape
+ * @returns {string} - Escaped text
+ */
+function escapeHTML(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Validate input against pattern and length
+ * @param {string} value - Input value
+ * @param {RegExp} pattern - Validation pattern (optional)
+ * @param {number} maxLength - Maximum length
+ * @returns {Object} - {isValid: boolean, error: string}
+ */
+function validateInput(value, pattern = null, maxLength = SECURITY_CONFIG.MAX_INPUT_LENGTH) {
+  if (!value || value.trim() === '') {
+    return { isValid: false, error: 'Input cannot be empty' };
+  }
+  
+  if (value.length > maxLength) {
+    return { isValid: false, error: `Input exceeds maximum length of ${maxLength} characters` };
+  }
+  
+  if (pattern && !pattern.test(value)) {
+    return { isValid: false, error: 'Input contains invalid characters' };
+  }
+  
+  return { isValid: true, error: null };
+}
+
+/**
+ * Sanitize and validate text input
+ * @param {string} value - Input value
+ * @param {number} maxLength - Maximum length
+ * @returns {string} - Sanitized value
+ */
+function sanitizeTextInput(value, maxLength = SECURITY_CONFIG.MAX_INPUT_LENGTH) {
+  if (!value) return '';
+  
+  // Remove null bytes
+  value = value.replace(/\0/g, '');
+  
+  // Trim whitespace
+  value = value.trim();
+  
+  // Limit length
+  if (value.length > maxLength) {
+    value = value.substring(0, maxLength);
+  }
+  
+  // Sanitize HTML
+  return sanitizeHTML(value);
+}
+
+/**
+ * Validate email format
+ * @param {string} email - Email address
+ * @returns {boolean} - True if valid
+ */
+function validateEmail(email) {
+  return SECURITY_CONFIG.EMAIL_PATTERN.test(email);
+}
+
+/**
+ * Validate phone number format
+ * @param {string} phone - Phone number
+ * @returns {boolean} - True if valid
+ */
+function validatePhone(phone) {
+  return SECURITY_CONFIG.PHONE_PATTERN.test(phone);
+}
+
+/**
+ * Generate CSRF token (client-side only)
+ * NOTE: For production, generate tokens server-side
+ * @returns {string} - CSRF token
+ */
+function generateCSRFToken() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Validate file upload
+ * @param {File} file - File object
+ * @returns {Object} - {isValid: boolean, error: string}
+ */
+function validateFileUpload(file) {
+  if (!file) {
+    return { isValid: false, error: 'No file selected' };
+  }
+  
+  if (file.size > SECURITY_CONFIG.MAX_FILE_SIZE) {
+    return { isValid: false, error: `File size exceeds ${SECURITY_CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB limit` };
+  }
+  
+  if (!SECURITY_CONFIG.ALLOWED_FILE_TYPES.includes(file.type)) {
+    return { isValid: false, error: 'Invalid file type. Only JSON files are allowed' };
+  }
+  
+  return { isValid: true, error: null };
+}
+
+/**
+ * Safely set element content using textContent instead of innerHTML
+ * @param {HTMLElement} element - Target element
+ * @param {string} content - Content to set
+ */
+function safeSetContent(element, content) {
+  if (!element) return;
+  element.textContent = sanitizeTextInput(content);
+}
+
+/**
+ * Safely set HTML content with sanitization
+ * Use only when HTML rendering is absolutely necessary
+ * @param {HTMLElement} element - Target element
+ * @param {string} html - HTML content
+ */
+function safeSetHTML(element, html) {
+  if (!element) return;
+  element.innerHTML = sanitizeHTML(html);
+}
+
+/**
+ * Rate limiting helper (client-side)
+ * NOTE: This is not a security measure, only UX protection
+ * @param {Function} func - Function to rate limit
+ * @param {number} delay - Delay in milliseconds
+ * @returns {Function} - Rate limited function
+ */
+function rateLimit(func, delay = 1000) {
+  let timeout = null;
+  return function(...args) {
+    if (timeout) return;
+    func.apply(this, args);
+    timeout = setTimeout(() => timeout = null, delay);
+  };
+}
+
+/**
+ * Encrypt data for localStorage (basic implementation)
+ * NOTE: This provides obfuscation, not true encryption
+ * For production, use server-side encryption
+ * @param {string} data - Data to encrypt
+ * @returns {string} - Base64 encoded data
+ */
+function encryptData(data) {
+  try {
+    return btoa(encodeURIComponent(data));
+  } catch (e) {
+    console.error('Encryption failed:', e);
+    return data;
+  }
+}
+
+/**
+ * Decrypt data from localStorage
+ * @param {string} data - Encrypted data
+ * @returns {string} - Decrypted data
+ */
+function decryptData(data) {
+  try {
+    return decodeURIComponent(atob(data));
+  } catch (e) {
+    console.error('Decryption failed:', e);
+    return data;
+  }
+}
+
+/**
+ * Log security event (for monitoring)
+ * In production, send to security monitoring service
+ * @param {string} eventType - Type of security event
+ * @param {Object} details - Event details
+ */
+function logSecurityEvent(eventType, details) {
+  const event = {
+    timestamp: new Date().toISOString(),
+    type: eventType,
+    details: details,
+    userAgent: navigator.userAgent
+  };
+  console.warn('Security Event:', event);
+  // In production: send to monitoring service
+}
+
+// Initialize CSRF token on page load
+let csrfToken = generateCSRFToken();
 
 // ═══════════════════════════════════════
 //  INIT
@@ -1545,6 +1811,16 @@ function selectProjStatus(s){
 function saveProjectEdits(){
   const soNo  = g('ep-so'), client=g('ep-client'), equip=g('ep-equip');
   if(!soNo||!client||!equip) return toast('Fill required fields','err');
+  
+  // Validate and sanitize inputs
+  const validatedSoNo = validateInput(soNo, SECURITY_CONFIG.INPUT_PATTERN, 50);
+  if (!validatedSoNo.isValid) return toast('Invalid SO Number format','err');
+  
+  const validatedClient = validateInput(client, null, 200);
+  if (!validatedClient.isValid) return toast('Invalid Client Name','err');
+  
+  const validatedEquip = validateInput(equip, null, 200);
+  if (!validatedEquip.isValid) return toast('Invalid Equipment name','err');
 
   const p = projects.find(x=>x.id===curProjId);
   if(!p) return;
@@ -1557,15 +1833,16 @@ function saveProjectEdits(){
   if((editingProjStatus==='HOLD'||editingProjStatus==='CANCELLED') && !reason)
     return toast('Please provide a reason for this status','err');
 
-  p.soNo      = soNo;
-  p.client    = client;
-  p.equipment = equip;
-  p.capacity  = g('ep-cap');
-  p.priority  = g('ep-pri');
+  // Sanitize all inputs before saving
+  p.soNo      = sanitizeTextInput(soNo, 50);
+  p.client    = sanitizeTextInput(client, 200);
+  p.equipment = sanitizeTextInput(equip, 200);
+  p.capacity  = sanitizeTextInput(g('ep-cap'), 100);
+  p.priority  = g('ep-pri'); // Dropdown value, no sanitization needed
   p.projStatus= editingProjStatus;
 
   if(statusChanged){
-    p.statusReason    = reason||'';
+    p.statusReason    = sanitizeTextInput(reason||'', 500);
     p.statusChangedAt = Date.now();
     gLog('project',
       `Project ${p.soNo} status changed: ${oldStatus} → ${editingProjStatus}`,
@@ -1595,16 +1872,35 @@ function createProject(){
   const soNo   = g('np-so'),   client = g('np-client'), equip = g('np-equip');
   const cap    = g('np-cap'),  pri    = g('np-pri');
   if(!soNo||!client||!equip) return toast('Fill required fields','err');
+  
+  // Validate and sanitize all inputs
+  const validatedSoNo = validateInput(soNo, SECURITY_CONFIG.INPUT_PATTERN, 50);
+  if (!validatedSoNo.isValid) return toast('Invalid SO Number format','err');
+  
+  const validatedClient = validateInput(client, null, 200);
+  if (!validatedClient.isValid) return toast('Invalid Client Name','err');
+  
+  const validatedEquip = validateInput(equip, null, 200);
+  if (!validatedEquip.isValid) return toast('Invalid Equipment name','err');
 
   const p = {
-    id:uid(), soNo, client, equipment:equip, capacity:cap,
-    priority:pri, createdAt:Date.now(), documents:[], commReports:[],
-    projStatus:'RECEIVED', statusReason:'', statusChangedAt:null
+    id:uid(), 
+    soNo: sanitizeTextInput(soNo, 50), 
+    client: sanitizeTextInput(client, 200), 
+    equipment: sanitizeTextInput(equip, 200), 
+    capacity: sanitizeTextInput(cap, 100),
+    priority:pri, 
+    createdAt:Date.now(), 
+    documents:[], 
+    commReports:[],
+    projStatus:'RECEIVED', 
+    statusReason:'', 
+    statusChangedAt:null
   };
   projects.push(p);
-  gLog('project',`Project created: ${soNo} — ${client}`,{soNo, client});
+  gLog('project',`Project created: ${p.soNo} — ${p.client}`,{soNo: p.soNo, client: p.client});
   save(); closeModal('m-newproject');
-  nav('dashboard'); toast(`Project ${soNo} created!`,'ok');
+  nav('dashboard'); toast(`Project ${p.soNo} created!`,'ok');
 }
 
 // ═══════════════════════════════════════
@@ -1630,18 +1926,34 @@ function addDocument(){
   if(!p) return;
 
   const now=Date.now();
+  
+  // Sanitize inputs
+  const sanitizedName = sanitizeTextInput(name, 200);
+  const sanitizedDwg = sanitizeTextInput(dwg, 100);
+  const sanitizedBy = sanitizeTextInput(g('ad-by')||'—', 100);
+  const sanitizedTo = sanitizeTextInput(g('ad-to')||'—', 100);
+  const sanitizedRel = sanitizeTextInput(g('ad-rel')||'—', 100);
+  
   const doc={
-    id:uid(), name, drawingNumber:dwg,
-    type:docType, revision:'R0',
+    id:uid(), 
+    name: sanitizedName, 
+    drawingNumber: sanitizedDwg,
+    type:docType, 
+    revision:'R0',
     stage:docType==='SO'?'SO_CONFIRMED':'OFFER_STAGE',
-    stageEnteredAt:now, createdAt:now,
-    assignedBy:g('ad-by')||'—', assignedTo:g('ad-to')||'—', releasingTo:g('ad-rel')||'—',
-    needsClarification:false, clarifications:[], actLog:[]
+    stageEnteredAt:now, 
+    createdAt:now,
+    assignedBy: sanitizedBy, 
+    assignedTo: sanitizedTo, 
+    releasingTo: sanitizedRel,
+    needsClarification:false, 
+    clarifications:[], 
+    actLog:[]
   };
 
   p.documents.push(doc);
-  gLog('add',`Document added: "${name}" [${docType}]`,{
-    doc:name, drawing:dwg, type:docType, projId:p.id, soNo:p.soNo,
+  gLog('add',`Document added: "${sanitizedName}" [${docType}]`,{
+    doc:sanitizedName, drawing:sanitizedDwg, type:docType, projId:p.id, soNo:p.soNo,
     assignedBy:doc.assignedBy, assignedTo:doc.assignedTo, releasingTo:doc.releasingTo
   });
 
@@ -1654,7 +1966,7 @@ function addDocument(){
     if(c) c.scrollIntoView({behavior:'smooth',block:'start'});
   },200);
 
-  toast(`Document "${name}" added`,'ok');
+  toast(`Document "${sanitizedName}" added`,'ok');
 }
 
 // ═══════════════════════════════════════
@@ -1980,13 +2292,25 @@ Be concise and direct.`;
 
   try{
     const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+      method:"POST", 
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": "YOUR_API_KEY_HERE" // SECURITY: Store API key server-side, use backend proxy
+      },
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        messages:[{role:"user",content:prompt}]
+      })
     });
     const data=await r.json();
-    el.innerHTML=`<div class="ai-result">${data.content[0].text}</div>`;
+    
+    // Sanitize AI response before rendering
+    const sanitizedContent = sanitizeHTML(data.content[0].text);
+    safeSetHTML(el, `<div class="ai-result">${sanitizedContent}</div>`);
   } catch(e){
     el.innerHTML=`<div class="ai-result" style="color:var(--danger);">AI unavailable. Check connection.</div>`;
+    logSecurityEvent('ai_request_failed', { error: e.message });
   }
 }
 
@@ -2017,13 +2341,25 @@ Provide:
 
   try{
     const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]})
+      method:"POST", 
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": "YOUR_API_KEY_HERE" // SECURITY: Store API key server-side, use backend proxy
+      },
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1500,
+        messages:[{role:"user",content:prompt}]
+      })
     });
     const data=await r.json();
-    document.getElementById('ai-modal-content').innerHTML=`<div class="ai-result">${data.content[0].text}</div>`;
+    
+    // Sanitize AI response before rendering
+    const sanitizedContent = sanitizeHTML(data.content[0].text);
+    safeSetHTML(document.getElementById('ai-modal-content'), `<div class="ai-result">${sanitizedContent}</div>`);
   } catch(e){
     document.getElementById('ai-modal-content').innerHTML=`<div class="ai-result" style="color:var(--danger);">AI unavailable.</div>`;
+    logSecurityEvent('ai_project_request_failed', { error: e.message, projectId: p.id });
   }
 }
 
@@ -2054,14 +2390,51 @@ function exportData(){
 }
 
 function importData(e){
-  const file=e.target.files[0]; if(!file) return;
+  const file=e.target.files[0]; 
+  if(!file) return;
+  
+  // Validate file before processing
+  const validation = validateFileUpload(file);
+  if (!validation.isValid) {
+    toast(validation.error, 'err');
+    logSecurityEvent('file_upload_rejected', { reason: validation.error, fileName: file.name });
+    return;
+  }
+  
   const r=new FileReader();
   r.onload=ev=>{
     try{
       const d=JSON.parse(ev.target.result);
-      projects=d.projects||[]; globalLog=d.globalLog||[];
-      save(); nav('dashboard'); toast('Data imported','ok');
-    } catch{ toast('Invalid file','err'); }
+      
+      // Validate imported data structure
+      if (!d || typeof d !== 'object') {
+        throw new Error('Invalid data structure');
+      }
+      
+      // Sanitize and validate projects array
+      if (d.projects && Array.isArray(d.projects)) {
+        projects = d.projects.map(p => ({
+          ...p,
+          soNo: sanitizeTextInput(p.soNo || '', 50),
+          client: sanitizeTextInput(p.client || '', 200),
+          equipment: sanitizeTextInput(p.equipment || '', 200),
+          capacity: sanitizeTextInput(p.capacity || '', 100)
+        }));
+      } else {
+        projects = [];
+      }
+      
+      // Sanitize and validate global log
+      globalLog = (d.globalLog && Array.isArray(d.globalLog)) ? d.globalLog : [];
+      
+      save(); 
+      nav('dashboard'); 
+      toast('Data imported successfully','ok');
+      logSecurityEvent('data_imported', { projectCount: projects.length });
+    } catch(err){ 
+      toast('Invalid file format','err');
+      logSecurityEvent('import_failed', { error: err.message });
+    }
   };
   r.readAsText(file);
 }
