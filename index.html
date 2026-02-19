@@ -1054,7 +1054,7 @@ function save(){
       projects: projects,
       globalLog: globalLog
     })
-  });
+  }).catch(()=>{});
 }
 
 // ═══════════════════════════════════════
@@ -1768,10 +1768,10 @@ function sendBack(){
   const p=projects.find(x=>x.id===curProjId);
   const doc=p?.documents.find(d=>d.id===curDocId); if(!doc) return;
 
-  const sentTo=doc.assignedBy||'Assignor';
+  const sentTo = doc.assignedBy || 'Assignor';
   doc.clarifications.push({note, status:'SENT_BACK', by:doc.assignedTo||'You', sentBackTo:sentTo, ts:Date.now()});
-  doc.needsClarification=true;
-  const tmp=doc.assignedBy; doc.assignedBy=doc.assignedTo; doc.assignedTo=tmp; // swap
+  doc.needsClarification = true;
+  doc.assignedTo = sentTo;
 
   gLog('clarify',`"${doc.name}" sent back → ${sentTo}`,
     {doc:doc.name, drawing:doc.drawingNumber, note, sentBackTo:sentTo, projId:p.id, soNo:p.soNo});
@@ -1822,15 +1822,16 @@ function copyShareMessage(type){
 }
 
 function generateShareMessage(type){
-  const note = g('cl-notes');
+  const p = projects.find(x=>x.id===curProjId);
+  const doc = p?.documents.find(d=>d.id===curDocId);
+  if(!p || !doc) return null;
+
+  const latestClar = doc.clarifications?.length ? doc.clarifications[doc.clarifications.length-1] : null;
+  const note = g('cl-notes') || latestClar?.note || '';
   if(!note) {
     toast('Please add clarification notes first','err');
     return null;
   }
-
-  const p = projects.find(x=>x.id===curProjId);
-  const doc = p?.documents.find(d=>d.id===curDocId);
-  if(!p || !doc) return null;
 
   const user = JSON.parse(localStorage.getItem(USER_KEY)||'{}');
   const from = user.name || 'TULUVA';
@@ -1876,7 +1877,8 @@ Workflow Controller`
   }
 
   if(type === 'sendback'){
-    const sentTo = doc.assignedBy || 'Assignor';
+    const lastSendBack = (doc.clarifications||[]).slice().reverse().find(c=>c.status==='SENT_BACK');
+    const sentTo = lastSendBack?.sentBackTo || doc.assignedBy || 'Assignor';
     return {
       subject: `⚠️ Clarification Required: ${doc.drawingNumber} - ${doc.name}`,
       body: `Hi ${sentTo},
