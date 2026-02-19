@@ -2250,7 +2250,7 @@ function doLogout(){
 // ═══════════════════════════════════════
 //  START
 // ═══════════════════════════════════════
-init();
+window.addEventListener('DOMContentLoaded', init);
 </script>
 <!-- EDIT USER MODAL -->
 <div id="m-edituser" class="modal hidden">
@@ -2314,7 +2314,20 @@ init();
 
 <script>
 // keep credit bar in sync with sidebar toggle
-const _origToggle = toggleSidebar;
+(function(){
+  const _origToggle = toggleSidebar;
+  function syncCreditBar(){
+    const sb = document.getElementById('sidebar');
+    const credit = document.getElementById('credit-bar');
+    if(!sb || !credit) return;
+    credit.style.left = sb.classList.contains('collapsed') ? '0' : 'var(--sidebar-w)';
+  }
+  toggleSidebar = function(){
+    _origToggle();
+    syncCreditBar();
+  };
+  window.addEventListener('DOMContentLoaded', syncCreditBar);
+})();
 </script>
 </body>
 </html>
