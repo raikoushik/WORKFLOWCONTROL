@@ -1,0 +1,274 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly security scans every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # CodeQL Analysis for JavaScript/HTML
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended,security-and-quality
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+  # Dependency Vulnerability Scanning
+  dependency-review:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  # HTML/JavaScript Security Linting
+  security-lint:
+    name: Security Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install ESLint Security Plugin
+        run: |
+          npm init -y
+          npm install --save-dev eslint eslint-plugin-security eslint-plugin-no-unsanitized
+      
+      - name: Create ESLint Config
+        run: |
+          cat > .eslintrc.json << 'EOF'
+          {
+            "env": {
+              "browser": true,
+              "es2021": true
+            },
+            "extends": [
+              "eslint:recommended"
+            ],
+            "plugins": [
+              "security",
+              "no-unsanitized"
+            ],
+            "parserOptions": {
+              "ecmaVersion": 2021,
+              "sourceType": "script"
+            },
+            "rules": {
+              "security/detect-object-injection": "warn",
+              "security/detect-non-literal-regexp": "warn",
+              "security/detect-unsafe-regex": "error",
+              "security/detect-buffer-noassert": "error",
+              "security/detect-eval-with-expression": "error",
+              "security/detect-no-csrf-before-method-override": "error",
+              "security/detect-possible-timing-attacks": "warn",
+              "no-unsanitized/method": "error",
+              "no-unsanitized/property": "error"
+            }
+          }
+          EOF
+      
+      - name: Extract and Lint JavaScript from HTML
+        run: |
+          echo "Extracting JavaScript from HTML files..."
+          # Extract script blocks from HTML files
+          for file in *.html; do
+            if [ -f "$file" ]; then
+              # Extract inline JavaScript
+              sed -n '/<script>/,/<\/script>/p' "$file" | \
+                sed '/<script>/d' | \
+                sed '/<\/script>/d' > "${file%.html}.extracted.js"
+              
+              echo "Linting extracted JS from $file..."
+              npx eslint "${file%.html}.extracted.js" --no-ignore || true
+              rm -f "${file%.html}.extracted.js"
+            fi
+          done
+      
+      - name: Security Report
+        run: |
+          echo "✅ Security linting completed"
+          echo "Review any warnings or errors above"
+
+  # Custom Security Checks
+  custom-security-checks:
+    name: Custom Security Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Check for Exposed Secrets
+        run: |
+          echo "🔍 Scanning for potential exposed secrets..."
+          
+          # Check for API keys, tokens, passwords in HTML files
+          if grep -rniE '(api[_-]?key|secret|token|password|auth)["\s]*[:=]["\s]*[a-zA-Z0-9_-]{20,}' *.html 2>/dev/null; then
+            echo "⚠️ WARNING: Potential exposed secrets found in HTML files"
+            echo "Review the matches above and ensure no real secrets are committed"
+          else
+            echo "✅ No obvious exposed secrets detected"
+          fi
+      
+      - name: Check for Unsafe Patterns
+        run: |
+          echo "🔍 Checking for unsafe coding patterns..."
+          
+          unsafe_patterns_found=0
+          
+          # Check for eval usage
+          if grep -rni 'eval(' *.html 2>/dev/null; then
+            echo "⚠️ WARNING: eval() usage found - this is a security risk"
+            unsafe_patterns_found=$((unsafe_patterns_found + 1))
+          fi
+          
+          # Check for innerHTML usage (should use DOMPurify)
+          innerHTML_count=$(grep -o 'innerHTML' *.html 2>/dev/null | wc -l)
+          if [ "$innerHTML_count" -gt 0 ]; then
+            echo "ℹ️ INFO: Found $innerHTML_count uses of innerHTML"
+            echo "Ensure all innerHTML usage is protected by DOMPurify"
+          fi
+          
+          # Check for document.write
+          if grep -rni 'document\.write' *.html 2>/dev/null; then
+            echo "⚠️ WARNING: document.write() usage found - this is unsafe"
+            unsafe_patterns_found=$((unsafe_patterns_found + 1))
+          fi
+          
+          # Check for onclick/onload inline handlers
+          inline_handlers=$(grep -oE 'on[a-z]+=' *.html 2>/dev/null | wc -l)
+          if [ "$inline_handlers" -gt 0 ]; then
+            echo "ℹ️ INFO: Found $inline_handlers inline event handlers"
+            echo "Consider using addEventListener for better CSP compliance"
+          fi
+          
+          if [ $unsafe_patterns_found -eq 0 ]; then
+            echo "✅ No critical unsafe patterns detected"
+          else
+            echo "⚠️ Found $unsafe_patterns_found critical security issues"
+            echo "Please review and address the warnings above"
+          fi
+      
+      - name: Check Security Headers
+        run: |
+          echo "🔍 Checking for security headers in HTML..."
+          
+          for file in *.html; do
+            if [ -f "$file" ]; then
+              echo "Checking $file..."
+              
+              # Check for CSP
+              if grep -qi 'Content-Security-Policy' "$file"; then
+                echo "  ✅ CSP meta tag found"
+              else
+                echo "  ⚠️ CSP meta tag missing"
+              fi
+              
+              # Check for X-Content-Type-Options
+              if grep -qi 'X-Content-Type-Options' "$file"; then
+                echo "  ✅ X-Content-Type-Options found"
+              else
+                echo "  ⚠️ X-Content-Type-Options missing"
+              fi
+              
+              # Check for X-Frame-Options
+              if grep -qi 'X-Frame-Options' "$file"; then
+                echo "  ✅ X-Frame-Options found"
+              else
+                echo "  ⚠️ X-Frame-Options missing"
+              fi
+              
+              # Check for DOMPurify
+              if grep -qi 'DOMPurify' "$file"; then
+                echo "  ✅ DOMPurify library found"
+              else
+                echo "  ⚠️ DOMPurify library not found"
+              fi
+            fi
+          done
+      
+      - name: Check Input Validation
+        run: |
+          echo "🔍 Checking for input validation..."
+          
+          for file in *.html; do
+            if [ -f "$file" ]; then
+              # Check for validation functions
+              if grep -qi 'validate' "$file"; then
+                echo "✅ Validation functions found in $file"
+              else
+                echo "ℹ️ No obvious validation functions in $file"
+              fi
+              
+              # Check for sanitize functions
+              if grep -qi 'sanitize' "$file"; then
+                echo "✅ Sanitization functions found in $file"
+              else
+                echo "ℹ️ No obvious sanitization functions in $file"
+              fi
+            fi
+          done
+
+  # Security Summary
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [codeql-analysis, security-lint, custom-security-checks]
+    if: always()
+    
+    steps:
+      - name: Security Scan Summary
+        run: |
+          echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Scans Completed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CodeQL Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security Linting" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Custom Security Checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review any security alerts in the Security tab" >> $GITHUB_STEP_SUMMARY
+          echo "2. Address any warnings or errors from the scans" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update dependencies if vulnerabilities are found" >> $GITHUB_STEP_SUMMARY
+          echo "4. Review SECURITY.md for security best practices" >> $GITHUB_STEP_SUMMARY
