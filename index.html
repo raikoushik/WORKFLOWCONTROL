@@ -1685,6 +1685,27 @@ function renderReports(p){
 // ═══════════════════════════════════════
 //  GLOBAL ACTIVITY LOG
 // ═══════════════════════════════════════
+
+/**
+ * Log activity to global log
+ * @param {string} type - Type of activity (add, status, release, delete, revision, clarify, project)
+ * @param {string} action - Description of the action
+ * @param {Object} detail - Additional details about the activity
+ */
+function gLog(type, action, detail = {}) {
+  const entry = {
+    type: type,
+    action: sanitizeTextInput(action, 500), // Sanitize log entry
+    ts: Date.now(),
+    detail: detail
+  };
+  globalLog.push(entry);
+  // Keep log size manageable (last 1000 entries)
+  if (globalLog.length > 1000) {
+    globalLog = globalLog.slice(-1000);
+  }
+}
+
 function renderGlobalActivity(){
   const el = document.getElementById('global-activity');
   el.innerHTML = globalLog.length ? globalLog.map(e=>actEntry(e)).join('') :
